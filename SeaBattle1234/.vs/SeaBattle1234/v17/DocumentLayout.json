@@ -1,0 +1,58 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "D:\\UnityProjects\\Seabattle1234\\SeaBattle1234\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{2E83A18C-CDD5-A81E-1C1D-B5DFBE4B4275}|Assembly-CSharp.csproj|D:\\UnityProjects\\Seabattle1234\\SeaBattle1234\\assets\\cell.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{2E83A18C-CDD5-A81E-1C1D-B5DFBE4B4275}|Assembly-CSharp.csproj|solutionrelative:assets\\cell.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{2E83A18C-CDD5-A81E-1C1D-B5DFBE4B4275}|Assembly-CSharp.csproj|d:\\unityprojects\\seabattle1234\\seabattle1234\\assets\\gridmanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{2E83A18C-CDD5-A81E-1C1D-B5DFBE4B4275}|Assembly-CSharp.csproj|solutionrelative:assets\\gridmanager.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 2,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{cce594b6-0c39-4442-ba28-10c64ac7e89f}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "GridManager.cs",
+              "DocumentMoniker": "D:\\UnityProjects\\Seabattle1234\\SeaBattle1234\\Assets\\GridManager.cs",
+              "RelativeDocumentMoniker": "Assets\\GridManager.cs",
+              "ToolTip": "D:\\UnityProjects\\Seabattle1234\\SeaBattle1234\\Assets\\GridManager.cs",
+              "RelativeToolTip": "Assets\\GridManager.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAACEAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-02-17T04:44:19.25Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "cell.cs",
+              "DocumentMoniker": "D:\\UnityProjects\\Seabattle1234\\SeaBattle1234\\Assets\\cell.cs",
+              "RelativeDocumentMoniker": "Assets\\cell.cs",
+              "ToolTip": "D:\\UnityProjects\\Seabattle1234\\SeaBattle1234\\Assets\\cell.cs",
+              "RelativeToolTip": "Assets\\cell.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAwAAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-02-17T04:23:51.472Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
