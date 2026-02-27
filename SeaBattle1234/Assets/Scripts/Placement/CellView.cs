@@ -1,27 +1,45 @@
+ï»¿using System;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 
-public class CellView : MonoBehaviour
+public class CellView : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
 {
     public Vector2Int coord;
+
     private Image img;
+    private Action<Vector2Int> onClick;
+    private Action<Vector2Int> onHoverEnter;
+    private Action<Vector2Int> onHoverExit;
 
     void Awake()
     {
         img = GetComponent<Image>();
     }
 
-    public void Init(Vector2Int c, System.Action<Vector2Int> onClick)
+    // âœ… å…¼å®¹ï¼šç‚¹å‡» + æ‚¬åœ enter/exit
+    public void Init(
+        Vector2Int c,
+        Action<Vector2Int> onClick,
+        Action<Vector2Int> onHoverEnter = null,
+        Action<Vector2Int> onHoverExit = null)
     {
         coord = c;
+
+        this.onClick = onClick;
+        this.onHoverEnter = onHoverEnter;
+        this.onHoverExit = onHoverExit;
+
         var btn = GetComponent<Button>();
-        btn.onClick.RemoveAllListeners();
-        btn.onClick.AddListener(() => onClick(coord));
+        if (btn != null)
+        {
+            btn.onClick.RemoveAllListeners();
+            btn.onClick.AddListener(() => this.onClick?.Invoke(coord));
+        }
     }
 
     public void ApplyRenderState(RenderState s)
     {
-        // ÏÈÓÃÑÕÉ«Õ¼Î»£¬ºóÃæ»»Sprite
         switch (s)
         {
             case RenderState.Sea: img.color = new Color(0.2f, 0.5f, 0.9f, 1f); break;
@@ -36,17 +54,25 @@ public class CellView : MonoBehaviour
         }
     }
 
+    // âœ… é¢„è§ˆè¦†ç›–ï¼ˆæˆ‘ä»¬ç”¨åŠé€æ˜æ›´åƒâ€œæ‚¬åœâ€ï¼‰
     public void SetPreview(Color color)
     {
-        // ÓÃ¸ü¸ßÓÅÏÈ¼¶µÄÑÕÉ«¸²¸Çµ±Ç°ÏÔÊ¾
-        var img = GetComponent<UnityEngine.UI.Image>();
         img.color = color;
     }
 
     public void ClearPreview()
     {
-        // ÇåÔ¤ÀÀºó£¬Íâ²¿»áµ÷ÓÃ ApplyRenderState Ë¢»ØÕı³£ÑÕÉ«
+        // ä¸åœ¨è¿™é‡Œæ¢å¤é¢œè‰²ï¼šå¤–é¢ä¼š Refresh() å† ApplyRenderState
     }
 
+    // ===== Hover events =====
+    public void OnPointerEnter(PointerEventData eventData)
+    {
+        onHoverEnter?.Invoke(coord);
+    }
 
+    public void OnPointerExit(PointerEventData eventData)
+    {
+        onHoverExit?.Invoke(coord);
+    }
 }

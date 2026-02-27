@@ -2,117 +2,127 @@
 
 public static class BattleResolver
 {
-    public static void ResolveTurn(BoardModel p0, BoardModel p1,
-                                   TurnPlan plan0, TurnPlan plan1)
+    private const int TORP_LEN = 5;
+
+    public static bool Resolve(BoardModel enemyBoard, PlayerViewModel attackerView, TurnAction act)
     {
-        Debug.Log("=== 开始回合结算 ===");
-
-        // 1️⃣ 先处理玩家0攻击玩家1
-        ApplyAllAttacks(p0, p1, plan0);
-
-        // 2️⃣ 再处理玩家1攻击玩家0
-        ApplyAllAttacks(p1, p0, plan1);
-
-        // 3️⃣ 更新沉没状态
-        UpdateSunk(p0);
-        UpdateSunk(p1);
-
-        Debug.Log("=== 回合结算结束 ===");
-    }
-
-    static void ApplyAllAttacks(BoardModel attacker,
-                                BoardModel defender,
-                                TurnPlan plan)
-    {
-        // 先火炮
-        foreach (var pos in plan.guns)
-            ApplyGun(defender, pos);
-
-        // 再鱼雷
-        foreach (var torp in plan.torpedoes)
-            ApplyTorpedo(defender, torp);
-
-        // 最后炸弹
-        foreach (var bomb in plan.bombs)
-            ApplyBomb(defender, bomb);
-    }
-
-    static void ApplyGun(BoardModel defender, Vector2Int pos)
-    {
-        if (!defender.Inside(pos.x, pos.y)) return;
-
-        var cell = defender.truth[pos.x, pos.y];
-        if (cell.hasShip)
+        switch (act.weapon)
         {
-            cell.isDamaged = true;
-            defender.truth[pos.x, pos.y] = cell;
+            case WeaponType.Gun:
+                return ResolveGun(enemyBoard, attackerView, act.anchor);
 
-            Debug.Log($"火炮命中 ({pos.x},{pos.y})");
+            case WeaponType.Bomb:
+                return ResolveBomb2x2(enemyBoard, attackerView, act.anchor);
+
+            case WeaponType.Scout:
+                ResolveScout2x2(enemyBoard, attackerView, act.anchor);
+                return true;
+
+            case WeaponType.Torpedo:
+                if (!act.hasDir) return false;
+                return ResolveTorpedo(enemyBoard, attackerView, act.anchor, act.dir);
+
+            default:
+                return false;
         }
     }
 
-    static void ApplyTorpedo(BoardModel defender, TurnPlan.Torpedo torp)
+    private static bool ResolveGun(BoardModel board, PlayerViewModel view, Vector2Int rc)
     {
-        Vector2Int p = torp.start;
+        view.AddFlag(rc.x, rc.y, CellIntelFlags.GunShot);
 
-        for (int i = 0; i < 4; i++)
-        {
-            if (!defender.Inside(p.x, p.y)) break;
-
-            var cell = defender.truth[p.x, p.y];
-
-            if (cell.hasShip)
-            {
-                cell.isDamaged = true;
-                defender.truth[p.x, p.y] = cell;
-
-                Debug.Log($"鱼雷命中 ({p.x},{p.y})");
-                break;
-            }
-
-            p += torp.dir;
-        }
+        bool ok = board.TryShoot(rc.x, rc.y, out bool isHit, out _);
+        if (ok && isHit) view.AddFlag(rc.x, rc.y, CellIntelFlags.GunHit);
+        return ok;
     }
 
-    static void ApplyBomb(BoardModel defender, TurnPlan.Bomb bomb)
+    // 2x2：anchor 当作左上角
+    private static bool ResolveBomb2x2(BoardModel board, PlayerViewModel view, Vector2Int tl)
     {
+        bool any = false;
         for (int dr = 0; dr < 2; dr++)
-        {
             for (int dc = 0; dc < 2; dc++)
             {
-                int r = bomb.topLeft.x + dr;
-                int c = bomb.topLeft.y + dc;
+                int r = tl.x + dr, c = tl.y + dc;
+                if (!board.Inside(r, c)) continue;
 
-                if (!defender.Inside(r, c)) continue;
+                view.AddFlag(r, c, CellIntelFlags.BombArea);
 
-                var cell = defender.truth[r, c];
-                if (cell.hasShip)
-                {
-                    cell.isDamaged = true;
-                    defender.truth[r, c] = cell;
-
-                    Debug.Log($"炸弹命中 ({r},{c})");
-                }
+                bool ok = board.TryShoot(r, c, out bool isHit, out _);
+                if (ok) any = true;
+                if (ok && isHit) view.AddFlag(r, c, CellIntelFlags.BombHit);
             }
-        }
+        return any;
     }
 
-    static void UpdateSunk(BoardModel board)
+    // 侦察：只加 Scout，不算射击
+    private static void ResolveScout2x2(BoardModel board, PlayerViewModel view, Vector2Int tl)
     {
-        foreach (var ship in board.ships)
-        {
-            bool allDamaged = true;
-
-            foreach (var pos in ship.cells)
+        for (int dr = 0; dr < 2; dr++)
+            for (int dc = 0; dc < 2; dc++)
             {
-                if (!board.truth[pos.x, pos.y].isDamaged)
-                {
-                    allDamaged = false;
-                    break;
-                }
+                int r = tl.x + dr, c = tl.y + dc;
+                if (!board.Inside(r, c)) continue;
+                view.AddFlag(r, c, CellIntelFlags.Scout);
             }
+    }
 
-            ship.sunk = allDamaged;
+    // ✅ 鱼雷：起点+方向，长度 1×5
+    // 规则（MVP版，合理且接近你们 demo）：
+    // 1) 先把整条路径标成 TorpLine（扫过）
+    // 2) 依次检查路径：
+    //    - 如果遇到“已经受损 isDamaged 的格子”，鱼雷被挡住，停止
+    //    - 如果遇到“未受损且有船”的格子：对该格造成伤害（TryShoot），标 TorpHitLine，然后停止
+    private static bool ResolveTorpedo(BoardModel board, PlayerViewModel view, Vector2Int start, Dir4 dir)
+    {
+        // 先标整条线（扫过）
+        var path = GetLine(start, dir, TORP_LEN);
+
+        foreach (var p in path)
+        {
+            if (!board.Inside(p.x, p.y)) continue;
+            view.AddFlag(p.x, p.y, CellIntelFlags.TorpLine);
+            board.MarkShot(p.x, p.y); // 记录被“扫过/攻击过”
         }
+
+        // 再决定命中（严格按顺序）
+        foreach (var p in path)
+        {
+            if (!board.Inside(p.x, p.y)) break;
+
+            var cell = board.truth[p.x, p.y];
+
+            if (cell.isDamaged) // 被已受损格子挡住
+                return true;
+
+            if (cell.hasShip && !cell.isDamaged)
+            {
+                // 对这一格造成伤害（TryShoot 会写 isDamaged）
+                bool ok = board.TryShoot(p.x, p.y, out bool isHit, out _);
+                if (ok && isHit)
+                    view.AddFlag(p.x, p.y, CellIntelFlags.TorpHitLine);
+                return true;
+            }
+        }
+
+        return true;
+    }
+
+    private static Vector2Int[] GetLine(Vector2Int start, Dir4 dir, int len)
+    {
+        var arr = new Vector2Int[len];
+        int dr = 0, dc = 0;
+        switch (dir)
+        {
+            case Dir4.Up: dr = -1; dc = 0; break;
+            case Dir4.Down: dr = 1; dc = 0; break;
+            case Dir4.Left: dr = 0; dc = -1; break;
+            case Dir4.Right: dr = 0; dc = 1; break;
+        }
+
+        for (int i = 0; i < len; i++)
+            arr[i] = new Vector2Int(start.x + dr * i, start.y + dc * i);
+
+        return arr;
     }
 }
