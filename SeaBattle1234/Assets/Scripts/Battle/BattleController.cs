@@ -1,4 +1,7 @@
-﻿using UnityEngine;
+﻿using BattleSystem;
+using System.Collections.Generic;
+using UnityEngine;
+using Debug = UnityEngine.Debug;
 
 public class BattleController : MonoBehaviour
 {
@@ -6,10 +9,15 @@ public class BattleController : MonoBehaviour
     [Header("Config (拖 GameConfig_Default 进来)")]
     public GameConfig config;
 
-    public System.Action OnPlanChanged; // lq ; UI 面板监听（如果回合内攻击计划变化，就刷新列表/数量）
+    [Header("Resolver (拖 AdvancedResolver 组件进来)")]
+    public MonoBehaviour resolverBehaviour;
+    private IAttackResolver resolver;
+
+    public System.Action OnPlanChanged;
 
     private BoardModel enemyBoard;
-    private PlayerViewModel playerView;
+    private PlayerViewModel originalPlayerView;        // 原来的类型（用于UI）- 使用CellIntelFlags
+    private BattleSystem.PlayerViewModel battlePlayerView;  // BattleSystem类型（用于Resolver）
     private Dir4 currentTorpDir = Dir4.Right;
 
     private TurnPlan plan = new TurnPlan();
@@ -18,18 +26,50 @@ public class BattleController : MonoBehaviour
     private bool hasHover;
     private Vector2Int hoverRC;
 
-    public IAttackResolver resolver;
-    // TODO(yjl): 当前仍可直接用 BattleResolver.Resolve
-    // TODO(dyh): unity里面不能直接拖interface，所以这里只留一个注释。你需要在现在代码里面new一个来实现。未来在 Awake/Start 里 resolver = new AdvancedResolver();
-
     void Start()
     {
         enemyBoard = GameManager.Instance.boards[1];
-        playerView = GameManager.Instance.views[0];
+        originalPlayerView = GameManager.Instance.views[0];  // 保存原来的
+
+        // 创建 BattleSystem.PlayerViewModel 
+        battlePlayerView = new BattleSystem.PlayerViewModel();
+        // 初始化IntelData字典
+        battlePlayerView.IntelData = new Dictionary<IntelType, bool[,]>();
+
+        // 为每种IntelType初始化数组
+        foreach (IntelType type in System.Enum.GetValues(typeof(IntelType)))
+        {
+            battlePlayerView.IntelData[type] = new bool[16, 20];
+        }
+
+        if (resolverBehaviour != null)
+        {
+            resolver = resolverBehaviour as IAttackResolver;
+            if (resolver == null)
+            {
+                Debug.LogError("resolverBehaviour 没有实现 IAttackResolver 接口！");
+            }
+        }
+        else
+        {
+            resolverBehaviour = GetComponent<MonoBehaviour>() as MonoBehaviour;
+            if (resolverBehaviour != null)
+            {
+                resolver = resolverBehaviour as IAttackResolver;
+            }
+
+            if (resolver == null)
+            {
+                Debug.LogWarning("未找到 resolver，创建默认 AdvancedResolver");
+                var advancedResolver = gameObject.AddComponent<AdvancedResolver>();
+                resolver = advancedResolver;
+                resolverBehaviour = advancedResolver;
+            }
+        }
 
         enemyGridView.Bind(OnClickEnemyCell);
         enemyGridView.BindHover(OnHoverEnter, OnHoverExit);
-        RedrawAll(); 
+        RedrawAll();
 
         Debug.Log("BattleController ready. 1=Gun 2=Torpedo 3=Bomb 4=Scout, Space=Resolve, Backspace=Undo, C=ClearPlan");
     }
@@ -73,9 +113,8 @@ public class BattleController : MonoBehaviour
         else
             plan.Push(new TurnAction(currentWeapon, rc));
         Debug.Log($"Plan +1: {currentWeapon} at {rc} (planCount={plan.Count})");
-        
-        OnPlanChanged?.Invoke();
 
+        OnPlanChanged?.Invoke();
         RedrawAll();
     }
 
@@ -83,48 +122,162 @@ public class BattleController : MonoBehaviour
     {
         Debug.Log($"Resolve plan: total={plan.Count}  gun={plan.gun.Count} torp={plan.torp.Count} bomb={plan.bomb.Count} scout={plan.scout.Count}");
 
-        // 你们的 demo 结算顺序：Gun -> Torpedo -> Bomb
-        foreach (var a in plan.GunSeq()) BattleResolver.Resolve(enemyBoard, playerView, a);
-        foreach (var a in plan.TorpSeq()) BattleResolver.Resolve(enemyBoard, playerView, a);
+        if (resolver == null)
+        {
+            Debug.LogError("Resolver is null! 无法结算");
+            return;
+        }
+
+        var attackAction = new AttackAction();
+
+        foreach (var a in plan.GunSeq())
+        {
+            attackAction.Guns.Add(new GunTarget { pos = a.anchor });
+        }
+
+        foreach (var a in plan.TorpSeq())
+        {
+            attackAction.Torpedoes.Add(new Torpedo
+            {
+                start = a.anchor,
+                dir = ConvertDir(a.dir)
+            });
+        }
+
         foreach (var a in plan.BombSeq())
         {
-            var area = GetArea2x2(a.anchor);
-            foreach (var p in area)
-                enemyGridView.PreviewCell(p.x, p.y, new Color(0.3f, 1f, 0.3f, 1f)); // 绿
+            attackAction.Bombs.Add(new BombTarget { topLeft = a.anchor });
         }
 
         foreach (var a in plan.ScoutSeq())
         {
-            var area = GetArea2x2(a.anchor);
-            foreach (var p in area)
-                enemyGridView.PreviewCell(p.x, p.y, new Color(1f, 1f, 0.4f, 1f)); // 黄
+            attackAction.Scouts.Add(new ScoutTarget { topLeft = a.anchor });
         }
 
+        // 转换 CellTruth[,] 到 BattleSystem.BoardCell[,]
+        var boardCells = ConvertToBoardCell(enemyBoard.truth);
+
+        // 使用 battlePlayerView 结算
+        var result = resolver.Resolve(boardCells, battlePlayerView, attackAction);
+
+        Debug.Log($"结算完成: 总命中={result.TotalHits}, 击沉={result.SunkShipIds.Count}艘");
+        foreach (var log in result.LogMessages)
+        {
+            Debug.Log(log);
+        }
+
+        // 将结算结果同步回 enemyBoard.truth
+        SyncBackToTruth(boardCells, enemyBoard.truth);
+
+        // 将 battlePlayerView 的数据同步回 originalPlayerView (使用CellIntelFlags)
+        SyncBackToOriginalView();
+
         plan.Clear();
-
         OnPlanChanged?.Invoke();
+        RedrawAll();
 
-        RedrawAll(); // 这会刷新到正式状态且没有预览
         Debug.Log("Resolve done. Plan cleared.");
-        
+    }
+
+    private Direction ConvertDir(Dir4 dir)
+    {
+        return dir switch
+        {
+            Dir4.Up => Direction.Up,
+            Dir4.Down => Direction.Down,
+            Dir4.Left => Direction.Left,
+            Dir4.Right => Direction.Right,
+            _ => Direction.Right
+        };
+    }
+
+    private BattleSystem.BoardCell[,] ConvertToBoardCell(CellTruth[,] truth)
+    {
+        var result = new BattleSystem.BoardCell[16, 20];
+        for (int r = 0; r < 16; r++)
+        {
+            for (int c = 0; c < 20; c++)
+            {
+                result[r, c] = new BattleSystem.BoardCell
+                {
+                    ShipId = truth[r, c].shipId,
+                    WasShot = truth[r, c].wasShot,
+                    IsDamaged = truth[r, c].isDamaged
+                };
+            }
+        }
+        return result;
+    }
+
+    private void SyncBackToTruth(BattleSystem.BoardCell[,] boardCells, CellTruth[,] truth)
+    {
+        for (int r = 0; r < 16; r++)
+        {
+            for (int c = 0; c < 20; c++)
+            {
+                truth[r, c].wasShot = boardCells[r, c].WasShot;
+                truth[r, c].isDamaged = boardCells[r, c].IsDamaged;
+            }
+        }
+    }
+
+    private void SyncBackToOriginalView()
+    {
+        // 将 battlePlayerView 的Intel数据同步回 originalPlayerView 的intel数组
+        for (int r = 0; r < 16; r++)
+        {
+            for (int c = 0; c < 20; c++)
+            {
+                CellIntelFlags flags = 0;
+
+                // 根据battlePlayerView的IntelData设置对应的flags
+                if (battlePlayerView.IntelData != null)
+                {
+                    if (battlePlayerView.IntelData.ContainsKey(IntelType.GunShot) &&
+                        battlePlayerView.IntelData[IntelType.GunShot][r, c])
+                        flags |= CellIntelFlags.GunShot;
+
+                    if (battlePlayerView.IntelData.ContainsKey(IntelType.GunHit) &&
+                        battlePlayerView.IntelData[IntelType.GunHit][r, c])
+                        flags |= CellIntelFlags.GunHit;
+
+                    if (battlePlayerView.IntelData.ContainsKey(IntelType.TorpLine) &&
+                        battlePlayerView.IntelData[IntelType.TorpLine][r, c])
+                        flags |= CellIntelFlags.TorpLine;
+
+                    if (battlePlayerView.IntelData.ContainsKey(IntelType.TorpHitLine) &&
+                        battlePlayerView.IntelData[IntelType.TorpHitLine][r, c])
+                        flags |= CellIntelFlags.TorpHitLine;
+
+                    if (battlePlayerView.IntelData.ContainsKey(IntelType.BombArea) &&
+                        battlePlayerView.IntelData[IntelType.BombArea][r, c])
+                        flags |= CellIntelFlags.BombArea;
+
+                    if (battlePlayerView.IntelData.ContainsKey(IntelType.BombHit) &&
+                        battlePlayerView.IntelData[IntelType.BombHit][r, c])
+                        flags |= CellIntelFlags.BombHit;
+
+                    if (battlePlayerView.IntelData.ContainsKey(IntelType.Scout) &&
+                        battlePlayerView.IntelData[IntelType.Scout][r, c])
+                        flags |= CellIntelFlags.Scout;
+                }
+
+                originalPlayerView.intel[r, c] = flags;
+            }
+        }
     }
 
     private void RedrawAll()
     {
-        // 1) 正式渲染
-        enemyGridView.Refresh(enemyBoard, playerView);
-
-        // 2) 画“已计划”的预览（点击入栈）
+        // 使用 originalPlayerView 来刷新UI
+        enemyGridView.Refresh(enemyBoard, originalPlayerView);
         DrawPlanPreviews();
-
-        // 3) 画“悬停跟随”的预览（优先级最高）
         if (hasHover)
             DrawHoverPreview();
     }
 
     private void DrawPlanPreviews()
     {
-        // 计划预览：用半透明颜色（更像“预览层”）
         var gunCol = new Color(0.4f, 0.7f, 1f, 0.55f);
         var torpCol = new Color(0.7f, 0.7f, 0.7f, 0.55f);
         var bombCol = new Color(0.3f, 1f, 0.3f, 0.55f);
@@ -148,7 +301,6 @@ public class BattleController : MonoBehaviour
 
     private void DrawHoverPreview()
     {
-        // 悬停预览：更明显一点（更不透明）
         var gunCol = new Color(0.4f, 0.7f, 1f, 0.85f);
         var torpCol = new Color(0.7f, 0.7f, 0.7f, 0.85f);
         var bombCol = new Color(0.3f, 1f, 0.3f, 0.85f);
@@ -197,10 +349,10 @@ public class BattleController : MonoBehaviour
     {
         return new Vector2Int[]
         {
-        new Vector2Int(tl.x,     tl.y),
-        new Vector2Int(tl.x,     tl.y + 1),
-        new Vector2Int(tl.x + 1, tl.y),
-        new Vector2Int(tl.x + 1, tl.y + 1),
+            new Vector2Int(tl.x,     tl.y),
+            new Vector2Int(tl.x,     tl.y + 1),
+            new Vector2Int(tl.x + 1, tl.y),
+            new Vector2Int(tl.x + 1, tl.y + 1),
         };
     }
 
@@ -216,10 +368,6 @@ public class BattleController : MonoBehaviour
         hasHover = false;
         RedrawAll();
     }
-
-    // =======================
-    // UI 接口（lq同学只需要调用这些，不需要直接改 plan / resolver）
-    // =======================
 
     public void UI_SetWeapon(WeaponType w)
     {
@@ -255,7 +403,7 @@ public class BattleController : MonoBehaviour
 
     public void UI_Resolve()
     {
-        ResolvePlan(); 
+        ResolvePlan();
         OnPlanChanged?.Invoke();
     }
 }
