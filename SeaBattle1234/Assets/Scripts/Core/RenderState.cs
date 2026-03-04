@@ -5,6 +5,7 @@ public enum RenderState
     // Scout reveal (ºÚ/°×ÓÉ truth.hasShip ¾ö¶¨)
     ScoutShip,      // Õì²ìºÚ£ºÓÐ´¬
     ScoutEmpty,     // Õì²ì°×£ºÎÞ´¬
+    ScoutDamagedShip,
 
     // Gun
     GunMiss,        // ²¨ÎÆ
@@ -16,5 +17,8 @@ public enum RenderState
 
     // Bomb
     BombArea,       // ÂÌÉ«¸²¸Ç
-    BombHit         // Ä¢¹½ÔÆ
+    BombHit,         // Ä¢¹½ÔÆ
+    BombAreaHit,
+    
+
 }

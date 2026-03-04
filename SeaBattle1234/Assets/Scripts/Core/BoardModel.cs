@@ -146,6 +146,7 @@ public class BoardModel
         }
 
         ship.sunk = true;
+        ships[shipId] = ship;
     }
 
     public bool AllShipsSunk()
@@ -157,6 +158,71 @@ public class BoardModel
         }
 
         return true;
+    }
+
+    // ===========================
+    // ✅ Debug：清空棋盘 & 固定摆船
+    // ===========================
+    public void Debug_ClearAll()
+    {
+        // 清 truth
+        for (int r = 0; r < H; r++)
+        {
+            for (int c = 0; c < W; c++)
+            {
+                var cell = truth[r, c];
+                cell.shipId = -1;
+                cell.hasShip = false;
+                cell.wasShot = false;
+                cell.isDamaged = false;
+                truth[r, c] = cell;
+            }
+        }
+
+        // 清 ships
+        ships.Clear();
+    }
+
+    /// <summary>
+    /// 在 a->b（含端点）摆一条直线船（仅支持水平或垂直）
+    /// shipId 用 ships 的 index；如果 shipId == ships.Count 会自动 Add 一个新船
+    /// </summary>
+    public void Debug_PlaceShipLine(int shipId, Vector2Int a, Vector2Int b)
+    {
+        while (ships.Count <= shipId)
+            ships.Add(new ShipInstance());
+
+        var ship = ships[shipId];
+        ship.cells.Clear();
+        ship.sunk = false;
+
+        int dr = (b.x > a.x) ? 1 : (b.x < a.x ? -1 : 0);
+        int dc = (b.y > a.y) ? 1 : (b.y < a.y ? -1 : 0);
+
+        int r = a.x;
+        int c = a.y;
+
+        while (true)
+        {
+            var cell = truth[r, c];
+
+            cell.shipId = shipId;
+            cell.hasShip = true;
+            cell.wasShot = false;
+            cell.isDamaged = false;
+
+            truth[r, c] = cell;
+
+            ship.cells.Add(new Vector2Int(r, c));
+
+            if (r == b.x && c == b.y)
+                break;
+
+            r += dr;
+            c += dc;
+        }
+
+        Debug.Log($"[DBG] Ship {shipId} placed from {a} to {b}");
     }
 
     //public void MarkShot(int r, int c)  由于 TryShootPending 已经记录了本回合的射击，这个函数就没什么用了；并且它会立刻落盘，无法达到缓存效果

@@ -18,6 +18,9 @@ public class BattleController : MonoBehaviour
     private bool hasHover;
     private Vector2Int hoverRC;
 
+    public bool DebugMode = true;
+    public bool DebugFixedSetup = true;
+
     public IAttackResolver resolver;
     // TODO(yjl): 当前仍可直接用 BattleResolver.Resolve
     // TODO(dyh): unity里面不能直接拖interface，所以这里只留一个注释。你需要在现在代码里面new一个来实现。未来在 Awake/Start 里 resolver = new AdvancedResolver();
@@ -155,8 +158,18 @@ public class BattleController : MonoBehaviour
         Debug.Log($"ResolveTurn: P0={p0.Count}, P1={p1.Count}");
 
         // Gun：P0打P1、P1打P0
-        foreach (var a in p0.GunSeq()) BattleResolver.Resolve(b1, v0, pd1, a);
-        foreach (var a in p1.GunSeq()) BattleResolver.Resolve(b0, v1, pd0, a);
+        // Gun：P0打P1、P1打P0
+        foreach (var a in p0.GunSeq())
+        {
+            bool ok = BattleResolver.Resolve(b1, v0, pd1, a);
+            Debug.Log($"[DBG] P0 Gun {a.anchor} ok={ok} pd1WasShot={pd1.WasShot(a.anchor.x, a.anchor.y)} pd1WasHit={pd1.WasHit(a.anchor.x, a.anchor.y)}");
+        }
+
+        foreach (var a in p1.GunSeq())
+        {
+            bool ok = BattleResolver.Resolve(b0, v1, pd0, a);
+            Debug.Log($"[DBG] P1 Gun {a.anchor} ok={ok} pd0WasShot={pd0.WasShot(a.anchor.x, a.anchor.y)} pd0WasHit={pd0.WasHit(a.anchor.x, a.anchor.y)}");
+        }
 
         // Torp
         foreach (var a in p0.TorpSeq()) BattleResolver.Resolve(b1, v0, pd1, a);
@@ -174,6 +187,15 @@ public class BattleController : MonoBehaviour
         b0.CommitPending(pd0);
         b1.CommitPending(pd1);
 
+        Debug.Log($"[DBG] After commit: b1(0,0) hasShip={b1.truth[0, 0].hasShip} shipId={b1.truth[0, 0].shipId} wasShot={b1.truth[0, 0].wasShot} damaged={b1.truth[0, 0].isDamaged}");
+        if (b1.ships != null && b1.ships.Count > 0)
+            Debug.Log($"[DBG] After commit: b1 ship0 cells={b1.ships[0].cells.Count} sunk={b1.ships[0].sunk}");
+        else
+            Debug.Log("[DBG] After commit: b1 ships.Count==0");
+        Debug.Log($"[DBG] After commit: b1(0,1) wasShot={b1.truth[0, 1].wasShot} damaged={b1.truth[0, 1].isDamaged}");
+        Debug.Log($"[DBG] After commit: b1(5,5) wasShot={b1.truth[5, 5].wasShot} damaged={b1.truth[5, 5].isDamaged}");
+        Debug.Log($"[DBG] After commit: b1(5,4) wasShot={b1.truth[5, 4].wasShot} damaged={b1.truth[5, 4].isDamaged}"); // 用来验证鱼雷扫过但不命中
+        Debug.Log($"[DBG] After commit: b1(6,5) wasShot={b1.truth[6, 5].wasShot} damaged={b1.truth[6, 5].isDamaged}");
         // 清空双方计划，进入下一回合
         p0.Clear();
         p1.Clear();
@@ -335,4 +357,6 @@ public class BattleController : MonoBehaviour
         ResolveTurn();
         OnPlanChanged?.Invoke();
     }
+
+   
 }

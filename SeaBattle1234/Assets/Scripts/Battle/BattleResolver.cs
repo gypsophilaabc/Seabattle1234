@@ -31,7 +31,9 @@ public static class BattleResolver
     {
         view.AddFlag(rc.x, rc.y, CellIntelFlags.GunShot);
 
-        bool ok = board.TryShootPending(pending, rc.x, rc.y, out bool isHit, out _);
+        bool ok = board.TryShootPending(pending, rc.x, rc.y, out bool isHit, out int sid);
+        Debug.Log($"[DBG] Gun ({rc.x},{rc.y}) ok={ok} hit={isHit} sid={sid}");
+
         if (ok && isHit) view.AddFlag(rc.x, rc.y, CellIntelFlags.GunHit);
         return ok;
     }
@@ -40,6 +42,28 @@ public static class BattleResolver
     private static bool ResolveBomb2x2(BoardModel board, PlayerViewModel view, PendingDamage pending, Vector2Int tl)
     {
         bool any = false;
+        bool causedNewDamage = false;
+
+        // 先结算：判断是否造成“新伤害”
+        for (int dr = 0; dr < 2; dr++)
+            for (int dc = 0; dc < 2; dc++)
+            {
+                int r = tl.x + dr, c = tl.y + dc;
+                if (!board.Inside(r, c)) continue;
+
+                // 若该格本来就是未受损船格，那么只要本回合把它标成 hit，就算“新伤害”
+                var cell = board.truth[r, c];
+                bool wasUndamagedShip = cell.hasShip && !cell.isDamaged;
+
+                // 统一走 TryShootPending（去重）
+                bool ok = board.TryShootPending(pending, r, c, out bool isHit, out _);
+                if (ok) any = true;
+
+                // 只有在 ok && isHit && 该格之前未受损 才算新伤害
+                if (ok && isHit && wasUndamagedShip) causedNewDamage = true;
+            }
+
+        // 再渲染：永远显示爆炸区
         for (int dr = 0; dr < 2; dr++)
             for (int dc = 0; dc < 2; dc++)
             {
@@ -48,10 +72,11 @@ public static class BattleResolver
 
                 view.AddFlag(r, c, CellIntelFlags.BombArea);
 
-                bool ok = board.TryShootPending(pending, r, c, out bool isHit, out _);
-                if (ok) any = true;
-                if (ok && isHit) view.AddFlag(r, c, CellIntelFlags.BombHit);
+                // 只有造成新伤害才整块强提示
+                if (causedNewDamage)
+                    view.AddFlag(r, c, CellIntelFlags.BombAreaHit);
             }
+
         return any;
     }
 
@@ -67,44 +92,44 @@ public static class BattleResolver
             }
     }
 
-    // ✅ 鱼雷：起点+方向，长度 1×5
-    // 规则（MVP版，合理且接近你们 demo）：
-    // 1) 先把整条路径标成 TorpLine（扫过）
-    // 2) 依次检查路径：
-    //    - 如果遇到“已经受损 isDamaged 的格子”，鱼雷被挡住，停止
-    //    - 如果遇到“未受损且有船”的格子：对该格造成伤害（TryShoot），标 TorpHitLine，然后停止
     private static bool ResolveTorpedo(BoardModel board, PlayerViewModel view, PendingDamage pending, Vector2Int start, Dir4 dir)
     {
-        // 先标整条线（扫过）
         var path = GetLine(start, dir, TORP_LEN);
 
+        // 弱提示：扫过
         foreach (var p in path)
         {
             if (!board.Inside(p.x, p.y)) continue;
             view.AddFlag(p.x, p.y, CellIntelFlags.TorpLine);
-            pending.Record(p.x, p.y, isHit: false); // 先统一当作 miss 记录 shot（防重复）
-            //board.MarkShot(p.x, p.y); // 记录被“扫过/攻击过” //会被 TryShootPending 记录，所以这里不标了；并且该函数会立刻落盘，无法达到缓存效果
+            pending.Record(p.x, p.y, isHit: false); // 扫过算 shot
         }
 
-        // 再决定命中（严格按顺序）
+        bool causedNewDamage = false;
+
+        // 找命中：穿过受损格，不阻挡；命中第一个“未受损船格”
         foreach (var p in path)
         {
             if (!board.Inside(p.x, p.y)) break;
 
             var cell = board.truth[p.x, p.y];
 
-            if (cell.isDamaged) // 被已受损格子挡住
-                return true;
-
             if (cell.hasShip && !cell.isDamaged)
             {
-                // 对这一格造成伤害（TryShoot 会写 isDamaged）（旧）// 注意：如果 TryShootPending 返回 false（比如重复攻击），则不标 TorpHitLine，因为没有实际造成伤害
-                //bool ok = board.TryShootPending(pending,p.x, p.y, out bool isHit, out _);
-                pending.SetHit(p.x, p.y); // 直接把这一格标成 hit（前提是之前确实记录过 shot），不管 TryShootPending 成败；因为无论如何这条线都被扫过了，且该格确实有船（不标 TorpHitLine 反而奇怪）
-                 
-                // if (ok && isHit)
+                // 这一下会造成新伤害（因为原本未受损）
+                pending.SetHit(p.x, p.y);
+                causedNewDamage = true;
+                break;
+            }
+            // 若是 hasShip && isDamaged：继续往后找（不阻挡）
+        }
+
+        // 强提示：只在造成新伤害时整条变色
+        if (causedNewDamage)
+        {
+            foreach (var p in path)
+            {
+                if (!board.Inside(p.x, p.y)) continue;
                 view.AddFlag(p.x, p.y, CellIntelFlags.TorpHitLine);
-                return true;
             }
         }
 

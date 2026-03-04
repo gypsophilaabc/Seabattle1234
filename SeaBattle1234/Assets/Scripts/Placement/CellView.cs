@@ -47,10 +47,12 @@ public class CellView : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
             case RenderState.GunHit: img.color = new Color(1f, 0.4f, 0.2f, 1f); break;
             case RenderState.TorpLine: img.color = new Color(0.6f, 0.6f, 0.6f, 1f); break;
             case RenderState.TorpHitLine: img.color = new Color(0.7f, 0.9f, 1f, 1f); break;
-            case RenderState.BombArea: img.color = new Color(0.2f, 0.9f, 0.3f, 1f); break;
+            case RenderState.BombArea: img.color = new Color(0.9f, 0.85f, 0.4f, 1f); break;
             case RenderState.BombHit: img.color = new Color(0.9f, 0.9f, 0.2f, 1f); break;
             case RenderState.ScoutShip: img.color = Color.black; break;
-            case RenderState.ScoutEmpty: img.color = Color.white; break;
+            case RenderState.ScoutEmpty: img.color = Color.white; break;  
+            case RenderState.BombAreaHit: img.color = new Color(1.00f, 0.70f, 0.10f, 1f); break;   // 橙（强）
+            case RenderState.ScoutDamagedShip: img.color = new Color(0.55f, 0.10f, 0.10f, 1f); break; // 深红/暗红
         }
     }
 
