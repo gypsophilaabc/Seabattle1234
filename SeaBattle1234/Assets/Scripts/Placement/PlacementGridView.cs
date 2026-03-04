@@ -17,8 +17,14 @@ public class PlacementGridView : MonoBehaviour
     private List<Vector2Int> lastPreviewCells = new List<Vector2Int>();
     private bool lastPreviewValid = false;
 
+    //wyx 2026.3.1 增加临时棋盘变量，之后所有GameManager.Instance.boards[0]的地方均换为placementBoard，玩家
+    public int playerId = 0;          // 0/1，在 Inspector 里改，明确在给哪个玩家摆放棋盘
+    private BoardModel placementBoard;  //临时棋盘变量
+    private bool committed = false;   //阶段锁，放置重复调用copyfrom
+
     void Start()
     {
+        placementBoard = new BoardModel();  // 摆放阶段用临时棋盘
         BuildGrid();
         EnsureScoutRevealForAll();
         BuildPlacementQueue();
@@ -87,7 +93,7 @@ public class PlacementGridView : MonoBehaviour
 
         // 计算预览覆盖格
         var cells = GetRectCells(topR, topC, h, w);
-        bool valid = CanPlaceRect(GameManager.Instance.boards[0], topR, topC, h, w);
+        bool valid = CanPlaceRect(placementBoard, topR, topC, h, w);
 
         lastPreviewValid = valid;
         lastPreviewCells = cells;
@@ -187,12 +193,21 @@ public class PlacementGridView : MonoBehaviour
         int h = rotated ? t.w : t.h;
         int w = rotated ? t.h : t.w;
 
-        bool ok = TryPlaceRectShip(GameManager.Instance.boards[0], tid, rc.x, rc.y, h, w);
+        bool ok = TryPlaceRectShip(placementBoard, tid, rc.x, rc.y, h, w);
         if (!ok) return;
 
         queueIndex++;
         Refresh();
         PrintCurrentShipHint();
+        //wyx 2026.3.1：拜访完成后将数据交接到 GameManager 的正式棋盘，并进入下一阶段
+        if (queueIndex >= queue.Count && !committed)
+        {
+            committed = true;
+            GameManager.Instance.boards[playerId].CopyFrom(placementBoard);  
+            Debug.Log($"已交接：placementBoard -> GameManager.boards[{playerId}]");
+            // TODO: 这里进入下一阶段：切场景/通知下一个玩家/开始战斗
+        }
+        Debug.Log($"临时船数={placementBoard.ships.Count}, GM船数={GameManager.Instance.boards[playerId].ships.Count}");
     }
 
     bool TryPlaceRectShip(BoardModel board, int typeId, int topR, int topC, int h, int w)
@@ -225,7 +240,6 @@ public class PlacementGridView : MonoBehaviour
         }
 
         board.ships.Add(inst);
-
         Debug.Log($"✅ 放置成功：typeId={typeId} {h}x{w} shipId={shipId} @ ({topR},{topC})");
         return true;
     }
@@ -247,8 +261,8 @@ public class PlacementGridView : MonoBehaviour
 
     void RefreshCell(int r, int c)
     {
-        var board = GameManager.Instance.boards[0];
-        var view = GameManager.Instance.views[0];
+        var board = placementBoard;
+        var view = GameManager.Instance.views[playerId]; ;
 
         RenderState rs = RenderRules.GetRenderState(board.truth[r, c], view.intel[r, c]);
         views[r, c].ApplyRenderState(rs);

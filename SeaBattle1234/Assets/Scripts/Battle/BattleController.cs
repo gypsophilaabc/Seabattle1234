@@ -22,6 +22,10 @@ public class BattleController : MonoBehaviour
     // TODO(yjl): 当前仍可直接用 BattleResolver.Resolve
     // TODO(dyh): unity里面不能直接拖interface，所以这里只留一个注释。你需要在现在代码里面new一个来实现。未来在 Awake/Start 里 resolver = new AdvancedResolver();
 
+    //wyx: 预留接口，由于目前是还未做回合切换暂时没用到。可以让玩家切换不同的 resolver
+    private TurnPlan[] plans = new TurnPlan[2] { new TurnPlan(), new TurnPlan() };
+    private int planningPlayerId = 0; // 当前正在规划的玩家：0 或 1
+    private int EnemyOf(int pid) => 1 - pid;
     void Start()
     {
         enemyBoard = GameManager.Instance.boards[1];
@@ -46,7 +50,7 @@ public class BattleController : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.D)) { currentTorpDir = Dir4.Right; Debug.Log("TorpDir=Right"); }
 
         if (Input.GetKeyDown(KeyCode.Space))
-            ResolvePlan();
+            ResolveTurn();
 
         if (Input.GetKeyDown(KeyCode.Backspace))
         {
@@ -65,50 +69,122 @@ public class BattleController : MonoBehaviour
             RedrawAll();
         }
     }
-
-    private void OnClickEnemyCell(Vector2Int rc)
+    
+    private void OnClickEnemyCell(Vector2Int rc) // 点击敌方格子时，根据当前选择的武器类型和（如果是鱼雷）方向，把对应的攻击动作加入计划，适应攻防切换模式
     {
-        if (currentWeapon == WeaponType.Torpedo)
-            plan.Push(TurnAction.Torpedo(rc, currentTorpDir));
-        else
-            plan.Push(new TurnAction(currentWeapon, rc));
-        Debug.Log($"Plan +1: {currentWeapon} at {rc} (planCount={plan.Count})");
-        
-        OnPlanChanged?.Invoke();
+        var curPlan = plans[planningPlayerId];
 
+        if (currentWeapon == WeaponType.Torpedo)
+            curPlan.Push(TurnAction.Torpedo(rc, currentTorpDir));
+        else
+            curPlan.Push(new TurnAction(currentWeapon, rc));
+
+        Debug.Log($"P{planningPlayerId} Plan +1: {currentWeapon} at {rc} (planCount={curPlan.Count})");
+
+        OnPlanChanged?.Invoke();
         RedrawAll();
     }
+    //    private void OnClickEnemyCell(Vector2Int rc)
+    //{
+    //    var curPlan = plans[planningPlayerId];
 
-    private void ResolvePlan()
+    //    if (currentWeapon == WeaponType.Torpedo)
+    //        curPlan.Push(TurnAction.Torpedo(rc, currentTorpDir));
+    //    else
+    //        curPlan.Push(new TurnAction(currentWeapon, rc));
+
+    //    Debug.Log($"P{planningPlayerId} Plan +1: {currentWeapon} at {rc} (planCount={curPlan.Count})");
+
+    //    OnPlanChanged?.Invoke();
+    //    RedrawAll();
+    //}
+
+    public void UI_EndPlanningForCurrentPlayer()  //切换规划玩家（攻防切换时调用），也可以在 UI 里做个按钮来调用它
     {
-        Debug.Log($"Resolve plan: total={plan.Count}  gun={plan.gun.Count} torp={plan.torp.Count} bomb={plan.bomb.Count} scout={plan.scout.Count}");
+        planningPlayerId = 1 - planningPlayerId;
+        Debug.Log($"Now planning for P{planningPlayerId}");
+        OnPlanChanged?.Invoke();
+        RedrawAll();
+    }
+    //private void ResolvePlan()
+    //{
+    //    Debug.Log($"Resolve plan: total={plan.Count}  gun={plan.gun.Count} torp={plan.torp.Count} bomb={plan.bomb.Count} scout={plan.scout.Count}");
 
-        // 你们的 demo 结算顺序：Gun -> Torpedo -> Bomb
-        foreach (var a in plan.GunSeq()) BattleResolver.Resolve(enemyBoard, playerView, a);
-        foreach (var a in plan.TorpSeq()) BattleResolver.Resolve(enemyBoard, playerView, a);
-        foreach (var a in plan.BombSeq())
-        {
-            var area = GetArea2x2(a.anchor);
-            foreach (var p in area)
-                enemyGridView.PreviewCell(p.x, p.y, new Color(0.3f, 1f, 0.3f, 1f)); // 绿
-        }
+    //    // 你们的 demo 结算顺序：Gun -> Torpedo -> Bomb
+    //    var enemyPending = GameManager.Instance.pending[1];
 
-        foreach (var a in plan.ScoutSeq())
-        {
-            var area = GetArea2x2(a.anchor);
-            foreach (var p in area)
-                enemyGridView.PreviewCell(p.x, p.y, new Color(1f, 1f, 0.4f, 1f)); // 黄
-        }
+        
+    //    foreach (var a in plan.GunSeq()) BattleResolver.Resolve(enemyBoard, playerView, enemyPending, a);
+    //    foreach (var a in plan.TorpSeq()) BattleResolver.Resolve(enemyBoard, playerView, enemyPending, a);
+    //    // foreach (var a in plan.GunSeq()) BattleResolver.Resolve(enemyBoard, playerView, a);
+    //    // foreach (var a in plan.TorpSeq()) BattleResolver.Resolve(enemyBoard, playerView, a);
+    //    foreach (var a in plan.BombSeq()) BattleResolver.Resolve(enemyBoard, playerView, enemyPending, a);
+        
+    //    foreach (var a in plan.ScoutSeq())  // 侦察没有 pending 和 board 变化，但我们也先画预览（等同于“已计划”状态），再正式结算（正式结算会把 intel 加到 playerView 里，UI 会显示）
+    //    {
+    //        var area = GetArea2x2(a.anchor);
+    //        foreach (var p in area)
+    //            enemyGridView.PreviewCell(p.x, p.y, new Color(1f, 1f, 0.4f, 1f)); // 黄
+    //    }
 
-        plan.Clear();
+    //    enemyBoard.CommitPending(enemyPending);
+    //    if (enemyBoard.AllShipsSunk())
+    //        Debug.Log("Enemy all ships sunk!");
+    //    plan.Clear();
+
+    //    OnPlanChanged?.Invoke();
+
+    //    RedrawAll(); // 这会刷新到正式状态且没有预览
+    //    Debug.Log("Resolve done. Plan cleared.");
+        
+    //}
+    private void ResolveTurn() // 结算当前回合双方的计划（攻防切换时要结算双方计划），并进入下一回合（清空计划，重置状态，先手权切换等）。你们的 demo 结算顺序：Gun -> Torpedo -> Bomb -> Scout
+    {
+        var gm = GameManager.Instance;
+
+        var b0 = gm.boards[0];
+        var b1 = gm.boards[1];
+        var v0 = gm.views[0];
+        var v1 = gm.views[1];
+        var pd0 = gm.pending[0]; // 记录对 board0 的伤害
+        var pd1 = gm.pending[1]; // 记录对 board1 的伤害
+
+        var p0 = plans[0];
+        var p1 = plans[1];
+
+        Debug.Log($"ResolveTurn: P0={p0.Count}, P1={p1.Count}");
+
+        // Gun：P0打P1、P1打P0
+        foreach (var a in p0.GunSeq()) BattleResolver.Resolve(b1, v0, pd1, a);
+        foreach (var a in p1.GunSeq()) BattleResolver.Resolve(b0, v1, pd0, a);
+
+        // Torp
+        foreach (var a in p0.TorpSeq()) BattleResolver.Resolve(b1, v0, pd1, a);
+        foreach (var a in p1.TorpSeq()) BattleResolver.Resolve(b0, v1, pd0, a);
+
+        // Bomb
+        foreach (var a in p0.BombSeq()) BattleResolver.Resolve(b1, v0, pd1, a);
+        foreach (var a in p1.BombSeq()) BattleResolver.Resolve(b0, v1, pd0, a);
+
+        // Scout（不落盘，只加情报）
+        foreach (var a in p0.ScoutSeq()) BattleResolver.Resolve(b1, v0, pd1, a);
+        foreach (var a in p1.ScoutSeq()) BattleResolver.Resolve(b0, v1, pd0, a);
+
+        // 回合末落盘（包含 sunk 更新 + pd.Clear）
+        b0.CommitPending(pd0);
+        b1.CommitPending(pd1);
+
+        // 清空双方计划，进入下一回合
+        p0.Clear();
+        p1.Clear();
+
+        // 下一回合从 P0 开始规划（你们也可以交替先手）
+        planningPlayerId = 0;
 
         OnPlanChanged?.Invoke();
-
-        RedrawAll(); // 这会刷新到正式状态且没有预览
-        Debug.Log("Resolve done. Plan cleared.");
-        
+        RedrawAll();
+        Debug.Log("ResolveTurn done. Plans cleared.");
     }
-
     private void RedrawAll()
     {
         // 1) 正式渲染
@@ -122,26 +198,27 @@ public class BattleController : MonoBehaviour
             DrawHoverPreview();
     }
 
-    private void DrawPlanPreviews()
+    private void DrawPlanPreviews() // 画当前计划的预览（点击后入栈），不同武器类型不同颜色，不同于悬停预览（更淡一些）。有了攻防切换，需要区分“已计划”预览和“悬停”预览，后者优先级更高。
     {
-        // 计划预览：用半透明颜色（更像“预览层”）
+        var curPlan = plans[planningPlayerId];   // ✅ 关键：用当前正在规划的玩家 plan
+
         var gunCol = new Color(0.4f, 0.7f, 1f, 0.55f);
         var torpCol = new Color(0.7f, 0.7f, 0.7f, 0.55f);
         var bombCol = new Color(0.3f, 1f, 0.3f, 0.55f);
         var scoutCol = new Color(1f, 1f, 0.4f, 0.55f);
 
-        foreach (var a in plan.GunSeq())
+        foreach (var a in curPlan.GunSeq())
             enemyGridView.PreviewCell(a.anchor.x, a.anchor.y, gunCol);
 
-        foreach (var a in plan.TorpSeq())
+        foreach (var a in curPlan.TorpSeq())
             foreach (var p in GetTorpPath(a.anchor, a.dir))
                 enemyGridView.PreviewCell(p.x, p.y, torpCol);
 
-        foreach (var a in plan.BombSeq())
+        foreach (var a in curPlan.BombSeq())
             foreach (var p in GetArea2x2(a.anchor))
                 enemyGridView.PreviewCell(p.x, p.y, bombCol);
 
-        foreach (var a in plan.ScoutSeq())
+        foreach (var a in curPlan.ScoutSeq())
             foreach (var p in GetArea2x2(a.anchor))
                 enemyGridView.PreviewCell(p.x, p.y, scoutCol);
     }
@@ -255,7 +332,7 @@ public class BattleController : MonoBehaviour
 
     public void UI_Resolve()
     {
-        ResolvePlan(); 
+        ResolveTurn();
         OnPlanChanged?.Invoke();
     }
 }

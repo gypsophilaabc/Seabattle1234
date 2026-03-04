@@ -30,7 +30,43 @@ public class BoardModel
     // ✅ 攻击逻辑核心
     // ===========================
 
-    public bool TryShoot(int r, int c, out bool isHit, out int hitShipId)
+    //public bool TryShoot(int r, int c, out bool isHit, out int hitShipId)
+    //{
+    //    isHit = false;
+    //    hitShipId = -1;
+
+    //    if (!Inside(r, c))
+    //        return false;
+
+    //    var cell = truth[r, c];
+
+        // 已经攻击过
+    //    if (cell.wasShot)
+    //        return false;
+
+    //    cell.wasShot = true;
+
+    //    if (cell.hasShip)
+    //    {
+    //        cell.isDamaged = true;
+    //        isHit = true;
+    //        hitShipId = cell.shipId;
+    //    }
+
+    //    truth[r, c] = cell;
+
+        // 如果命中，更新沉没状态
+    //    if (isHit && hitShipId >= 0)
+    //    {
+    //        UpdateSunkForShip(hitShipId);
+    //    }
+
+    //    return true;
+    //}
+    // ===========================
+    //  回合内缓存射击（不落盘）
+    // ===========================
+    public bool TryShootPending(PendingDamage pd, int r, int c, out bool isHit, out int hitShipId)
     {
         isHit = false;
         hitShipId = -1;
@@ -38,32 +74,61 @@ public class BoardModel
         if (!Inside(r, c))
             return false;
 
-        var cell = truth[r, c];
-
-        // 已经攻击过
-        if (cell.wasShot)
+        //  已经落盘的攻击（上一回合/更早）不能再打
+        if (truth[r, c].wasShot)
             return false;
 
-        cell.wasShot = true;
+        //  本回合同一格重复打：无效（防重复伤害）
+        if (pd.WasShot(r, c))
+            return false;
 
-        if (cell.hasShip)
-        {
-            cell.isDamaged = true;
-            isHit = true;
-            hitShipId = cell.shipId;
-        }
+        var cell = truth[r, c];
+        isHit = cell.hasShip;
+        hitShipId = isHit ? cell.shipId : -1;
 
-        truth[r, c] = cell;
-
-        // 如果命中，更新沉没状态
-        if (isHit && hitShipId >= 0)
-        {
-            UpdateSunkForShip(hitShipId);
-        }
-
-        return true;
+        //  只记录到 pending，不写 truth
+        return pd.Record(r, c, isHit);
     }
 
+    // ===========================
+    // ✅ 回合末提交（落盘到 truth）
+    // ===========================
+    public void CommitPending(PendingDamage pd)
+    {
+        for (int r = 0; r < H; r++)
+        {
+            for (int c = 0; c < W; c++)
+            {
+                if (!pd.WasShot(r, c))
+                    continue;
+
+                var cell = truth[r, c];
+
+                // 防御：如果这格已经落盘 shot 过，就跳过
+                if (cell.wasShot)
+                    continue;
+
+                cell.wasShot = true;
+
+                if (pd.WasHit(r, c))
+                {
+                    cell.isDamaged = true;
+                    truth[r, c] = cell;
+
+                    // 命中则可能导致沉没
+                    int sid = cell.shipId;
+                    if (sid >= 0) UpdateSunkForShip(sid);
+                }
+                else
+                {
+                    truth[r, c] = cell;
+                }
+            }
+        }
+
+        // ✅ 提交完清空，进入下一回合
+        pd.Clear();
+    }
     private void UpdateSunkForShip(int shipId)
     {
         if (shipId < 0 || shipId >= ships.Count)
@@ -94,13 +159,13 @@ public class BoardModel
         return true;
     }
 
-    public void MarkShot(int r, int c)
-    {
-        if (!Inside(r, c)) return;
-        var cell = truth[r, c];
-        cell.wasShot = true;
-        truth[r, c] = cell;
-    }
+    //public void MarkShot(int r, int c)  由于 TryShootPending 已经记录了本回合的射击，这个函数就没什么用了；并且它会立刻落盘，无法达到缓存效果
+    //{
+    //    if (!Inside(r, c)) return;
+    //   var cell = truth[r, c];
+    //   cell.wasShot = true;
+    //  truth[r, c] = cell;
+    // }
 
     public void CopyFrom(BoardModel src)
     {
