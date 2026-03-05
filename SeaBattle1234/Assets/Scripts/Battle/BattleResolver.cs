@@ -94,7 +94,7 @@ public static class BattleResolver
 
     private static bool ResolveTorpedo(BoardModel board, PlayerViewModel view, PendingDamage pending, Vector2Int start, Dir4 dir)
     {
-        var path = GetLine(start, dir, TORP_LEN);
+        var path = AttackMath.GetLine(start, dir, TORP_LEN);
 
         // 弱提示：扫过
         foreach (var p in path)
@@ -112,11 +112,12 @@ public static class BattleResolver
             if (!board.Inside(p.x, p.y)) break;
 
             var cell = board.truth[p.x, p.y];
+            bool damagedNow = cell.isDamaged || pending.WasHit(p.x, p.y); // 本回合已命中也算“受损”
 
-            if (cell.hasShip && !cell.isDamaged)
+            if (cell.hasShip && !damagedNow)
             {
-                // 这一下会造成新伤害（因为原本未受损）
                 pending.SetHit(p.x, p.y);
+                Debug.Log($"[DBG] Torp sethit at ({p.x},{p.y}) WasShot={pending.WasShot(p.x, p.y)} WasHit={pending.WasHit(p.x, p.y)}  damagedBefore={cell.isDamaged}");
                 causedNewDamage = true;
                 break;
             }
@@ -128,6 +129,7 @@ public static class BattleResolver
         {
             foreach (var p in path)
             {
+                Debug.Log($"[DBG] Torp start={start} dir={dir} truth00 ship={board.truth[0, 0].hasShip} dmg={board.truth[0, 0].isDamaged} | truth01 ship={board.truth[0, 1].hasShip} dmg={board.truth[0, 1].isDamaged}");
                 if (!board.Inside(p.x, p.y)) continue;
                 view.AddFlag(p.x, p.y, CellIntelFlags.TorpHitLine);
             }

@@ -12,6 +12,26 @@ public class GameManager : MonoBehaviour
     public bool DebugMode = true;
     public bool DebugFixedSetup = true;
 
+    public int currentPlacementPlayer = 0;
+
+    public enum GamePhase
+    {
+        PlacementP0,
+        PlacementP1,
+        BattlePlanningP0,
+        BattlePlanningP1,
+        BattleResolving,
+        GameOver
+    }
+
+    public GamePhase phase = GamePhase.PlacementP0;
+
+    // 当前正在摆船/正在规划的玩家
+    public int activePlayerId = 0;
+
+    // 双方是否已经在本回合“按下确认”（规划结束）
+    public bool[] ready = new bool[2];
+
     void Awake()
     {
         if (Instance != null && Instance != this)
@@ -57,5 +77,26 @@ public class GameManager : MonoBehaviour
 
             Debug.Log("[DBG] New fixed setup applied.");
         }
+        //初始化
+        phase = GamePhase.PlacementP0;
+        activePlayerId = 0;
+        ready[0] = ready[1] = false;
+    }
+
+    void Start()
+    {
+        var line = AttackMath.GetLine(new Vector2Int(5, 5), Dir4.Right, 5);
+
+        Debug.Log("AttackMath line test:");
+
+        foreach (var p in line)
+            Debug.Log(p);
+
+        var rect = AttackMath.GetRect(new Vector2Int(3, 3), 2, 2);
+
+        Debug.Log("Rect test:");
+        foreach (var p in rect)
+            Debug.Log(p);
+
     }
 }

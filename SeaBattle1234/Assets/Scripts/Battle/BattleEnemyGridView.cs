@@ -21,13 +21,20 @@ public class BattleEnemyGridView : MonoBehaviour
         onCellClick = onClick;
     }
 
-    void Start()
+    void Awake()
     {
         BuildGrid();
     }
 
     void BuildGrid()
     {
+        Debug.Log($"[EnemyGrid] BuildGrid on {gameObject.name}, prefab={(cellPrefab ? cellPrefab.name : "NULL")}, parent={transform.name}");
+
+        if (cellPrefab == null)
+        {
+            Debug.LogError("[EnemyGrid] cellPrefab is NULL!");
+            return;
+        }
         for (int r = 0; r < BoardModel.H; r++)
             for (int c = 0; c < BoardModel.W; c++)
             {
@@ -42,10 +49,13 @@ public class BattleEnemyGridView : MonoBehaviour
                     rc => { onHoverExit?.Invoke(rc); }
                     );
             }
+        Debug.Log($"[EnemyGrid] BuildGrid done. childCount={transform.childCount}");
     }
 
     public void Refresh(BoardModel enemyBoard, PlayerViewModel playerView)
     {
+        if (views[0, 0] == null) BuildGrid(); //  ¿¡º”‘ÿ
+
         for (int r = 0; r < BoardModel.H; r++)
             for (int c = 0; c < BoardModel.W; c++)
             {

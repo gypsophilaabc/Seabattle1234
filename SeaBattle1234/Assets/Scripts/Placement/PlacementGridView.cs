@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
+using static GameManager;
 
 public class PlacementGridView : MonoBehaviour
 {
@@ -24,12 +25,16 @@ public class PlacementGridView : MonoBehaviour
 
     void Start()
     {
-        placementBoard = new BoardModel();  // 摆放阶段用临时棋盘
+        var gm = GameManager.Instance;
+        playerId = (gm.phase == GamePhase.PlacementP0) ? 0 : 1;
+
+        placementBoard = new BoardModel();
         BuildGrid();
-        EnsureScoutRevealForAll();
         BuildPlacementQueue();
         Refresh();
         PrintCurrentShipHint();
+
+        Debug.Log($"[Placement] phase={gm.phase} playerId={playerId}");
     }
 
     void Update()
@@ -180,8 +185,10 @@ public class PlacementGridView : MonoBehaviour
         }
     }
 
+
     void OnCellClicked(Vector2Int rc)
     {
+        if (!inputEnabled) return;
         int tid = CurrentTypeId;
         if (tid == -1)
         {
@@ -262,9 +269,51 @@ public class PlacementGridView : MonoBehaviour
     void RefreshCell(int r, int c)
     {
         var board = placementBoard;
-        var view = GameManager.Instance.views[playerId]; ;
 
-        RenderState rs = RenderRules.GetRenderState(board.truth[r, c], view.intel[r, c]);
-        views[r, c].ApplyRenderState(rs);
+        if (board.truth[r, c].hasShip)
+        {
+            views[r, c].ApplyRenderState(RenderState.ScoutShip);
+        }
+        else
+        {
+            views[r, c].ApplyRenderState(RenderState.Sea);
+        }
+    }
+
+    // ====== For Flow Controller ======
+    private bool inputEnabled = true;
+
+    public void BindToPlayer(int pid)
+    {
+        playerId = pid;
+
+        // 切玩家时重置临时棋盘与队列（最稳妥：每次进入场景都重新Start也行）
+        placementBoard = new BoardModel();
+        committed = false;
+
+        BuildPlacementQueue();
+        Refresh();
+        PrintCurrentShipHint();
+
+        Debug.Log($"[PlacementGridView] BindToPlayer({pid})");
+    }
+
+    public void DisablePlacementInput() => inputEnabled = false;
+    public void EnablePlacementInput() => inputEnabled = true;
+
+    // 清屏：只清“显示”，不动数据（最简单就是强制Refresh一次）
+    public void ClearVisual()
+    {
+        // 先把预览清掉（如果有）
+        lastPreviewCells.Clear();
+        hoverCell = null;
+
+        Refresh();
+        Debug.Log("[PlacementGridView] ClearVisual()");
+    }
+
+    public BoardModel GetPlacementBoard()
+    {
+        return placementBoard;
     }
 }

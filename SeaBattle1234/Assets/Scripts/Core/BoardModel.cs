@@ -99,6 +99,12 @@ public class BoardModel
         {
             for (int c = 0; c < W; c++)
             {
+                if (r == 0 && c == 0)
+                {
+                    var cell00 = truth[0, 0];
+                    Debug.Log($"[DBG] Commit (0,0): pdShot={pd.WasShot(0, 0)} pdHit={pd.WasHit(0, 0)} truthWasShot={cell00.wasShot} truthDamaged={cell00.isDamaged} ship={cell00.hasShip} shipId={cell00.shipId}");
+                }
+
                 if (!pd.WasShot(r, c))
                     continue;
 
@@ -106,7 +112,11 @@ public class BoardModel
 
                 // 防御：如果这格已经落盘 shot 过，就跳过
                 if (cell.wasShot)
+                {
+                    if (r == 0 && c == 0)
+                        Debug.Log("[DBG] Commit (0,0) SKIP because truth.wasShot already true");
                     continue;
+                }
 
                 cell.wasShot = true;
 
@@ -125,8 +135,9 @@ public class BoardModel
                 }
             }
         }
+        Debug.Log($"[DBG] After Commit: truth(0,0) wasShot={truth[0, 0].wasShot} damaged={truth[0, 0].isDamaged}");
 
-        // ✅ 提交完清空，进入下一回合
+        // 提交完清空，进入下一回合
         pd.Clear();
     }
     private void UpdateSunkForShip(int shipId)

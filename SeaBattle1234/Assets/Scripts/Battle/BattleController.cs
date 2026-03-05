@@ -12,7 +12,7 @@ public class BattleController : MonoBehaviour
     private PlayerViewModel playerView;
     private Dir4 currentTorpDir = Dir4.Right;
 
-    private TurnPlan plan = new TurnPlan();
+    
     private WeaponType currentWeapon = WeaponType.Gun;
 
     private bool hasHover;
@@ -28,17 +28,38 @@ public class BattleController : MonoBehaviour
     //wyx: 预留接口，由于目前是还未做回合切换暂时没用到。可以让玩家切换不同的 resolver
     private TurnPlan[] plans = new TurnPlan[2] { new TurnPlan(), new TurnPlan() };
     private int planningPlayerId = 0; // 当前正在规划的玩家：0 或 1
+    private TurnPlan plan => plans[planningPlayerId];
     private int EnemyOf(int pid) => 1 - pid;
+    //void Start()
+    //{
+    //    var gm = GameManager.Instance;
+
+    //    // 兜底：防止直接从 Battle 场景 Play 时没初始化
+    //    if (gm.boards[0] == null) gm.boards[0] = new BoardModel();
+    //    if (gm.boards[1] == null) gm.boards[1] = new BoardModel();
+    //    if (gm.views[0] == null) gm.views[0] = new PlayerViewModel();
+    //    if (gm.views[1] == null) gm.views[1] = new PlayerViewModel();
+    //    if (gm.pending[0] == null) gm.pending[0] = new PendingDamage();
+    //    if (gm.pending[1] == null) gm.pending[1] = new PendingDamage();
+
+    //    enemyBoard = gm.boards[1];
+    //    playerView = gm.views[0];
+
+    //    if (enemyGridView == null)
+    //    {
+    //        Debug.LogError("[BattleController] enemyGridView is NULL. Drag a BattleEnemyGridView into the inspector!");
+    //        return;
+    //    }
+
+    //    enemyGridView.Bind(OnClickEnemyCell);
+    //    enemyGridView.BindHover(OnHoverEnter, OnHoverExit);
+
+    //    RedrawAll();
+    //    Debug.Log("BattleController ready. 1=Gun 2=Torpedo 3=Bomb 4=Scout, Space=Resolve, Backspace=Undo, C=ClearPlan");
+    //}
     void Start()
     {
-        enemyBoard = GameManager.Instance.boards[1];
-        playerView = GameManager.Instance.views[0];
-
-        enemyGridView.Bind(OnClickEnemyCell);
-        enemyGridView.BindHover(OnHoverEnter, OnHoverExit);
-        RedrawAll(); 
-
-        Debug.Log("BattleController ready. 1=Gun 2=Torpedo 3=Bomb 4=Scout, Space=Resolve, Backspace=Undo, C=ClearPlan");
+        Debug.Log("BattleController ready. Waiting for BattleFlowController to set context.");
     }
 
     void Update()
@@ -141,7 +162,7 @@ public class BattleController : MonoBehaviour
     //    Debug.Log("Resolve done. Plan cleared.");
         
     //}
-    private void ResolveTurn() // 结算当前回合双方的计划（攻防切换时要结算双方计划），并进入下一回合（清空计划，重置状态，先手权切换等）。你们的 demo 结算顺序：Gun -> Torpedo -> Bomb -> Scout
+    public void ResolveTurn() // 结算当前回合双方的计划（攻防切换时要结算双方计划），并进入下一回合（清空计划，重置状态，先手权切换等）。你们的 demo 结算顺序：Gun -> Torpedo -> Bomb -> Scout
     {
         var gm = GameManager.Instance;
 
@@ -358,5 +379,41 @@ public class BattleController : MonoBehaviour
         OnPlanChanged?.Invoke();
     }
 
-   
+    public void AddPlannedAction(int attackerId, WeaponType wpn, Vector2Int anchor, bool hasDir = false, Dir4 dir = Dir4.Up)
+    {
+        var a = new TurnAction
+        {
+            weapon = wpn,
+            anchor = anchor,
+            hasDir = hasDir,
+            dir = dir
+        };
+
+        plans[attackerId].Push(a);     // ✅ 正确：TurnPlan 用 Push
+        OnPlanChanged?.Invoke();
+        RedrawAll();
+
+        Debug.Log($"[BattleController] P{attackerId} Push {wpn} at {anchor} hasDir={hasDir} dir={dir} total={plans[attackerId].Count}");
+    }
+
+    public void SetContext(int planningPid, BoardModel enemyBoard, PlayerViewModel playerView, BattleEnemyGridView grid)
+    {
+        this.planningPlayerId = planningPid;
+        this.enemyBoard = enemyBoard;
+        this.playerView = playerView;
+        this.enemyGridView = grid;
+
+        // 重新绑定点击/hover
+        enemyGridView.Bind(OnClickEnemyCell);
+        enemyGridView.BindHover(OnHoverEnter, OnHoverExit);
+
+        RedrawAll();
+        Debug.Log($"[BattleController] Context set. planningPid={planningPid}");
+    }
+
+    public void ResolveTurnPublic()
+    {
+        ResolveTurn(); // 你原来 private 的那个
+    }
+
 }
