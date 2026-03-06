@@ -12,7 +12,6 @@ public class BattleController : MonoBehaviour
     private PlayerViewModel playerView;
     private Dir4 currentTorpDir = Dir4.Right;
 
-    
     private WeaponType currentWeapon = WeaponType.Gun;
 
     private bool hasHover;
@@ -25,53 +24,26 @@ public class BattleController : MonoBehaviour
     // TODO(yjl): 当前仍可直接用 BattleResolver.Resolve
     // TODO(dyh): unity里面不能直接拖interface，所以这里只留一个注释。你需要在现在代码里面new一个来实现。未来在 Awake/Start 里 resolver = new AdvancedResolver();
 
-    //wyx: 预留接口，由于目前是还未做回合切换暂时没用到。可以让玩家切换不同的 resolver
+    // wyx: 预留接口，由于目前是还未做回合切换暂时没用到。可以让玩家切换不同的 resolver
     private TurnPlan[] plans = new TurnPlan[2] { new TurnPlan(), new TurnPlan() };
     private int planningPlayerId = 0; // 当前正在规划的玩家：0 或 1
     private TurnPlan plan => plans[planningPlayerId];
     private int EnemyOf(int pid) => 1 - pid;
-    //void Start()
-    //{
-    //    var gm = GameManager.Instance;
 
-    //    // 兜底：防止直接从 Battle 场景 Play 时没初始化
-    //    if (gm.boards[0] == null) gm.boards[0] = new BoardModel();
-    //    if (gm.boards[1] == null) gm.boards[1] = new BoardModel();
-    //    if (gm.views[0] == null) gm.views[0] = new PlayerViewModel();
-    //    if (gm.views[1] == null) gm.views[1] = new PlayerViewModel();
-    //    if (gm.pending[0] == null) gm.pending[0] = new PendingDamage();
-    //    if (gm.pending[1] == null) gm.pending[1] = new PendingDamage();
-
-    //    enemyBoard = gm.boards[1];
-    //    playerView = gm.views[0];
-
-    //    if (enemyGridView == null)
-    //    {
-    //        Debug.LogError("[BattleController] enemyGridView is NULL. Drag a BattleEnemyGridView into the inspector!");
-    //        return;
-    //    }
-
-    //    enemyGridView.Bind(OnClickEnemyCell);
-    //    enemyGridView.BindHover(OnHoverEnter, OnHoverExit);
-
-    //    RedrawAll();
-    //    Debug.Log("BattleController ready. 1=Gun 2=Torpedo 3=Bomb 4=Scout, Space=Resolve, Backspace=Undo, C=ClearPlan");
-    //}
     void Start()
     {
-        Debug.Log("BattleController ready. Waiting for BattleFlowController to set context.");
     }
 
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.Alpha1)) { currentWeapon = WeaponType.Gun; Debug.Log("Weapon=Gun"); }
-        if (Input.GetKeyDown(KeyCode.Alpha2)) { currentWeapon = WeaponType.Torpedo; Debug.Log("Weapon=Torpedo"); }
-        if (Input.GetKeyDown(KeyCode.Alpha3)) { currentWeapon = WeaponType.Bomb; Debug.Log("Weapon=Bomb(2x2)"); }
-        if (Input.GetKeyDown(KeyCode.Alpha4)) { currentWeapon = WeaponType.Scout; Debug.Log("Weapon=Scout(2x2)"); }
-        if (Input.GetKeyDown(KeyCode.W)) { currentTorpDir = Dir4.Up; Debug.Log("TorpDir=Up"); }
-        if (Input.GetKeyDown(KeyCode.S)) { currentTorpDir = Dir4.Down; Debug.Log("TorpDir=Down"); }
-        if (Input.GetKeyDown(KeyCode.A)) { currentTorpDir = Dir4.Left; Debug.Log("TorpDir=Left"); }
-        if (Input.GetKeyDown(KeyCode.D)) { currentTorpDir = Dir4.Right; Debug.Log("TorpDir=Right"); }
+        if (Input.GetKeyDown(KeyCode.Alpha1)) { currentWeapon = WeaponType.Gun; }
+        if (Input.GetKeyDown(KeyCode.Alpha2)) { currentWeapon = WeaponType.Torpedo; }
+        if (Input.GetKeyDown(KeyCode.Alpha3)) { currentWeapon = WeaponType.Bomb; }
+        if (Input.GetKeyDown(KeyCode.Alpha4)) { currentWeapon = WeaponType.Scout; }
+        if (Input.GetKeyDown(KeyCode.W)) { currentTorpDir = Dir4.Up; }
+        if (Input.GetKeyDown(KeyCode.S)) { currentTorpDir = Dir4.Down; }
+        if (Input.GetKeyDown(KeyCode.A)) { currentTorpDir = Dir4.Left; }
+        if (Input.GetKeyDown(KeyCode.D)) { currentTorpDir = Dir4.Right; }
 
         if (Input.GetKeyDown(KeyCode.Space))
             ResolveTurn();
@@ -80,7 +52,6 @@ public class BattleController : MonoBehaviour
         {
             if (plan.TryPop(out var a))
             {
-                Debug.Log($"Undo plan: {a.weapon} at {a.anchor} (planCount={plan.Count})");
                 OnPlanChanged?.Invoke();
                 RedrawAll();
             }
@@ -89,79 +60,36 @@ public class BattleController : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.C))
         {
             plan.Clear();
-            Debug.Log("Plan cleared.");
             RedrawAll();
         }
     }
-    
-    private void OnClickEnemyCell(Vector2Int rc) // 点击敌方格子时，根据当前选择的武器类型和（如果是鱼雷）方向，把对应的攻击动作加入计划，适应攻防切换模式
+
+    private void OnClickEnemyCell(Vector2Int rc)
     {
-        var curPlan = plans[planningPlayerId];
+        bool ok = false;
 
         if (currentWeapon == WeaponType.Torpedo)
-            curPlan.Push(TurnAction.Torpedo(rc, currentTorpDir));
+        {
+            ok = AddPlannedTorpedo(planningPlayerId, rc, currentTorpDir);
+        }
         else
-            curPlan.Push(new TurnAction(currentWeapon, rc));
+        {
+            ok = AddPlannedAction(planningPlayerId, currentWeapon, rc);
+        }
 
-        Debug.Log($"P{planningPlayerId} Plan +1: {currentWeapon} at {rc} (planCount={curPlan.Count})");
-
-        OnPlanChanged?.Invoke();
-        RedrawAll();
+        if (!ok)
+        {
+            Debug.LogWarning($"[Battle] P{planningPlayerId} 无法继续添加 {currentWeapon}，已达到配额上限。");
+        }
     }
-    //    private void OnClickEnemyCell(Vector2Int rc)
-    //{
-    //    var curPlan = plans[planningPlayerId];
 
-    //    if (currentWeapon == WeaponType.Torpedo)
-    //        curPlan.Push(TurnAction.Torpedo(rc, currentTorpDir));
-    //    else
-    //        curPlan.Push(new TurnAction(currentWeapon, rc));
-
-    //    Debug.Log($"P{planningPlayerId} Plan +1: {currentWeapon} at {rc} (planCount={curPlan.Count})");
-
-    //    OnPlanChanged?.Invoke();
-    //    RedrawAll();
-    //}
-
-    public void UI_EndPlanningForCurrentPlayer()  //切换规划玩家（攻防切换时调用），也可以在 UI 里做个按钮来调用它
+    public void UI_EndPlanningForCurrentPlayer()  // 切换规划玩家（攻防切换时调用），也可以在 UI 里做个按钮来调用它
     {
         planningPlayerId = 1 - planningPlayerId;
-        Debug.Log($"Now planning for P{planningPlayerId}");
         OnPlanChanged?.Invoke();
         RedrawAll();
     }
-    //private void ResolvePlan()
-    //{
-    //    Debug.Log($"Resolve plan: total={plan.Count}  gun={plan.gun.Count} torp={plan.torp.Count} bomb={plan.bomb.Count} scout={plan.scout.Count}");
 
-    //    // 你们的 demo 结算顺序：Gun -> Torpedo -> Bomb
-    //    var enemyPending = GameManager.Instance.pending[1];
-
-        
-    //    foreach (var a in plan.GunSeq()) BattleResolver.Resolve(enemyBoard, playerView, enemyPending, a);
-    //    foreach (var a in plan.TorpSeq()) BattleResolver.Resolve(enemyBoard, playerView, enemyPending, a);
-    //    // foreach (var a in plan.GunSeq()) BattleResolver.Resolve(enemyBoard, playerView, a);
-    //    // foreach (var a in plan.TorpSeq()) BattleResolver.Resolve(enemyBoard, playerView, a);
-    //    foreach (var a in plan.BombSeq()) BattleResolver.Resolve(enemyBoard, playerView, enemyPending, a);
-        
-    //    foreach (var a in plan.ScoutSeq())  // 侦察没有 pending 和 board 变化，但我们也先画预览（等同于“已计划”状态），再正式结算（正式结算会把 intel 加到 playerView 里，UI 会显示）
-    //    {
-    //        var area = GetArea2x2(a.anchor);
-    //        foreach (var p in area)
-    //            enemyGridView.PreviewCell(p.x, p.y, new Color(1f, 1f, 0.4f, 1f)); // 黄
-    //    }
-
-    //    enemyBoard.CommitPending(enemyPending);
-    //    if (enemyBoard.AllShipsSunk())
-    //        Debug.Log("Enemy all ships sunk!");
-    //    plan.Clear();
-
-    //    OnPlanChanged?.Invoke();
-
-    //    RedrawAll(); // 这会刷新到正式状态且没有预览
-    //    Debug.Log("Resolve done. Plan cleared.");
-        
-    //}
     public void ResolveTurn() // 结算当前回合双方的计划（攻防切换时要结算双方计划），并进入下一回合（清空计划，重置状态，先手权切换等）。你们的 demo 结算顺序：Gun -> Torpedo -> Bomb -> Scout
     {
         var gm = GameManager.Instance;
@@ -176,20 +104,15 @@ public class BattleController : MonoBehaviour
         var p0 = plans[0];
         var p1 = plans[1];
 
-        Debug.Log($"ResolveTurn: P0={p0.Count}, P1={p1.Count}");
-
-        // Gun：P0打P1、P1打P0
         // Gun：P0打P1、P1打P0
         foreach (var a in p0.GunSeq())
         {
-            bool ok = BattleResolver.Resolve(b1, v0, pd1, a);
-            Debug.Log($"[DBG] P0 Gun {a.anchor} ok={ok} pd1WasShot={pd1.WasShot(a.anchor.x, a.anchor.y)} pd1WasHit={pd1.WasHit(a.anchor.x, a.anchor.y)}");
+            BattleResolver.Resolve(b1, v0, pd1, a);
         }
 
         foreach (var a in p1.GunSeq())
         {
-            bool ok = BattleResolver.Resolve(b0, v1, pd0, a);
-            Debug.Log($"[DBG] P1 Gun {a.anchor} ok={ok} pd0WasShot={pd0.WasShot(a.anchor.x, a.anchor.y)} pd0WasHit={pd0.WasHit(a.anchor.x, a.anchor.y)}");
+            BattleResolver.Resolve(b0, v1, pd0, a);
         }
 
         // Torp
@@ -208,15 +131,6 @@ public class BattleController : MonoBehaviour
         b0.CommitPending(pd0);
         b1.CommitPending(pd1);
 
-        Debug.Log($"[DBG] After commit: b1(0,0) hasShip={b1.truth[0, 0].hasShip} shipId={b1.truth[0, 0].shipId} wasShot={b1.truth[0, 0].wasShot} damaged={b1.truth[0, 0].isDamaged}");
-        if (b1.ships != null && b1.ships.Count > 0)
-            Debug.Log($"[DBG] After commit: b1 ship0 cells={b1.ships[0].cells.Count} sunk={b1.ships[0].sunk}");
-        else
-            Debug.Log("[DBG] After commit: b1 ships.Count==0");
-        Debug.Log($"[DBG] After commit: b1(0,1) wasShot={b1.truth[0, 1].wasShot} damaged={b1.truth[0, 1].isDamaged}");
-        Debug.Log($"[DBG] After commit: b1(5,5) wasShot={b1.truth[5, 5].wasShot} damaged={b1.truth[5, 5].isDamaged}");
-        Debug.Log($"[DBG] After commit: b1(5,4) wasShot={b1.truth[5, 4].wasShot} damaged={b1.truth[5, 4].isDamaged}"); // 用来验证鱼雷扫过但不命中
-        Debug.Log($"[DBG] After commit: b1(6,5) wasShot={b1.truth[6, 5].wasShot} damaged={b1.truth[6, 5].isDamaged}");
         // 清空双方计划，进入下一回合
         p0.Clear();
         p1.Clear();
@@ -226,8 +140,8 @@ public class BattleController : MonoBehaviour
 
         OnPlanChanged?.Invoke();
         RedrawAll();
-        Debug.Log("ResolveTurn done. Plans cleared.");
     }
+
     private void RedrawAll()
     {
         // 1) 正式渲染
@@ -317,10 +231,10 @@ public class BattleController : MonoBehaviour
     {
         return new Vector2Int[]
         {
-        new Vector2Int(tl.x,     tl.y),
-        new Vector2Int(tl.x,     tl.y + 1),
-        new Vector2Int(tl.x + 1, tl.y),
-        new Vector2Int(tl.x + 1, tl.y + 1),
+            new Vector2Int(tl.x,     tl.y),
+            new Vector2Int(tl.x,     tl.y + 1),
+            new Vector2Int(tl.x + 1, tl.y),
+            new Vector2Int(tl.x + 1, tl.y + 1),
         };
     }
 
@@ -379,21 +293,46 @@ public class BattleController : MonoBehaviour
         OnPlanChanged?.Invoke();
     }
 
-    public void AddPlannedAction(int attackerId, WeaponType wpn, Vector2Int anchor, bool hasDir = false, Dir4 dir = Dir4.Up)
+    public bool AddPlannedAction(int attackerId, WeaponType wpn, Vector2Int anchor)
     {
-        var a = new TurnAction
+        if (!CanPlanWeapon(attackerId, wpn))
         {
-            weapon = wpn,
-            anchor = anchor,
-            hasDir = hasDir,
-            dir = dir
-        };
+            Debug.LogWarning($"[Battle] P{attackerId} cannot plan more {wpn}. quota={GetWeaponQuota(attackerId, wpn)} used={GetPlannedCountPublic(attackerId, wpn)}");
+            return false;
+        }
 
-        plans[attackerId].Push(a);     // ✅ 正确：TurnPlan 用 Push
+        plans[attackerId].Push(new TurnAction(wpn, anchor));
+
+        var flow = FindObjectOfType<BattleFlowController>();
+        if (flow != null)
+            flow.ResetUnderfillConfirm(attackerId);
+
         OnPlanChanged?.Invoke();
         RedrawAll();
 
-        Debug.Log($"[BattleController] P{attackerId} Push {wpn} at {anchor} hasDir={hasDir} dir={dir} total={plans[attackerId].Count}");
+        Debug.Log($"[Battle] P{attackerId} planned {wpn} at {anchor}. used={GetPlannedCountPublic(attackerId, wpn)}/{GetWeaponQuota(attackerId, wpn)}");
+        return true;
+    }
+
+    public bool AddPlannedTorpedo(int attackerId, Vector2Int start, Dir4 dir)
+    {
+        if (!CanPlanWeapon(attackerId, WeaponType.Torpedo))
+        {
+            Debug.LogWarning($"[Battle] P{attackerId} cannot plan more Torpedo. quota={GetWeaponQuota(attackerId, WeaponType.Torpedo)} used={GetPlannedCountPublic(attackerId, WeaponType.Torpedo)}");
+            return false;
+        }
+
+        plans[attackerId].Push(TurnAction.Torpedo(start, dir));
+
+        var flow = FindObjectOfType<BattleFlowController>();
+        if (flow != null)
+            flow.ResetUnderfillConfirm(attackerId);
+
+        OnPlanChanged?.Invoke();
+        RedrawAll();
+
+        Debug.Log($"[Battle] P{attackerId} planned Torpedo at {start} dir={dir}. used={GetPlannedCountPublic(attackerId, WeaponType.Torpedo)}/{GetWeaponQuota(attackerId, WeaponType.Torpedo)}");
+        return true;
     }
 
     public void SetContext(int planningPid, BoardModel enemyBoard, PlayerViewModel playerView, BattleEnemyGridView grid)
@@ -408,12 +347,196 @@ public class BattleController : MonoBehaviour
         enemyGridView.BindHover(OnHoverEnter, OnHoverExit);
 
         RedrawAll();
-        Debug.Log($"[BattleController] Context set. planningPid={planningPid}");
     }
 
     public void ResolveTurnPublic()
     {
-        ResolveTurn(); // 你原来 private 的那个
+        ResolveTurn();
     }
 
+    int GetPlannedCount(int pid, WeaponType weapon)
+    {
+        switch (weapon)
+        {
+            case WeaponType.Gun: return plans[pid].gun.Count;
+            case WeaponType.Torpedo: return plans[pid].torp.Count;
+            case WeaponType.Bomb: return plans[pid].bomb.Count;
+            case WeaponType.Scout: return plans[pid].scout.Count;
+            default: return 0;
+        }
+    }
+
+    bool CanPlanWeapon(int pid, WeaponType weapon)
+    {
+        int quota = GetWeaponQuota(pid, weapon);
+        int used = GetPlannedCount(pid, weapon);
+        return used < quota;
+    }
+
+    public int GetPlannedCountPublic(int pid, WeaponType weapon)
+    {
+        switch (weapon)
+        {
+            case WeaponType.Gun: return plans[pid].gun.Count;
+            case WeaponType.Torpedo: return plans[pid].torp.Count;
+            case WeaponType.Bomb: return plans[pid].bomb.Count;
+            case WeaponType.Scout: return plans[pid].scout.Count;
+            default: return 0;
+        }
+    }
+
+    int GetWeaponQuota(int pid, WeaponType weapon)
+    {
+        var board = GameManager.Instance.boards[pid];
+        int total = 0;
+
+        foreach (var ship in board.ships)
+        {
+            if (ship.sunk) continue;
+
+            string name = ShipCatalog.Types[ship.typeId].name;
+
+            switch (name)
+            {
+                case "护卫舰":
+                    if (weapon == WeaponType.Gun) total += 1;
+                    break;
+
+                case "鱼雷艇":
+                    if (weapon == WeaponType.Torpedo) total += 1;
+                    break;
+
+                case "驱逐舰":
+                    if (weapon == WeaponType.Gun) total += 1;
+                    if (weapon == WeaponType.Torpedo) total += 1;
+                    break;
+
+                case "巡洋舰":
+                    if (weapon == WeaponType.Gun) total += 3;
+                    break;
+
+                case "重巡洋舰":
+                    if (weapon == WeaponType.Gun) total += 4;
+                    break;
+
+                case "轻巡洋舰":
+                    if (weapon == WeaponType.Gun) total += 2;
+                    if (weapon == WeaponType.Torpedo) total += 1;
+                    break;
+
+                case "战列巡洋舰":
+                    if (weapon == WeaponType.Gun) total += 4;
+                    if (weapon == WeaponType.Torpedo) total += 1;
+                    break;
+
+                case "战列舰":
+                    if (weapon == WeaponType.Gun) total += 6;
+                    break;
+
+                case "航空战列舰（1）":
+                    if (weapon == WeaponType.Gun) total += 3;
+                    break;
+
+                case "航空战列舰（2）":
+                    if (weapon == WeaponType.Gun) total += 2;
+                    break;
+
+                case "装甲战列舰":
+                    if (weapon == WeaponType.Gun) total += 5;
+                    break;
+
+                case "护航航母":
+                    if (weapon == WeaponType.Bomb) total += 1;
+                    break;
+
+                case "航空母舰":
+                    if (weapon == WeaponType.Bomb) total += 2;
+                    if (weapon == WeaponType.Torpedo) total += 1;
+                    break;
+
+                case "扫雷艇":
+                    if (weapon == WeaponType.Gun) total += 1;
+                    break;
+
+                default:
+                    break;
+            }
+        }
+
+        return total;
+    }
+
+    public int GetWeaponQuotaPublic(int pid, WeaponType weapon)
+    {
+        return GetWeaponQuota(pid, weapon);
+    }
+
+    public bool ValidatePlanCounts(int pid, out string msg, out bool hasOverflow, out bool hasUnderflow)
+    {
+        hasOverflow = false;
+        hasUnderflow = false;
+        msg = "";
+
+        int quota, used;
+
+        // Gun
+        quota = GetWeaponQuotaPublic(pid, WeaponType.Gun);
+        used = GetPlannedCountPublic(pid, WeaponType.Gun);
+        if (used > quota)
+        {
+            hasOverflow = true;
+            msg += $"[火炮] 超出配额：已计划 {used} / 允许 {quota}\n";
+        }
+        else if (quota > 0 && used < quota)
+        {
+            hasUnderflow = true;
+            msg += $"[火炮] 尚未用满：已计划 {used} / 允许 {quota}\n";
+        }
+
+        // Torpedo
+        quota = GetWeaponQuotaPublic(pid, WeaponType.Torpedo);
+        used = GetPlannedCountPublic(pid, WeaponType.Torpedo);
+        if (used > quota)
+        {
+            hasOverflow = true;
+            msg += $"[鱼雷] 超出配额：已计划 {used} / 允许 {quota}\n";
+        }
+        else if (quota > 0 && used < quota)
+        {
+            hasUnderflow = true;
+            msg += $"[鱼雷] 尚未用满：已计划 {used} / 允许 {quota}\n";
+        }
+
+        // Bomb
+        quota = GetWeaponQuotaPublic(pid, WeaponType.Bomb);
+        used = GetPlannedCountPublic(pid, WeaponType.Bomb);
+        if (used > quota)
+        {
+            hasOverflow = true;
+            msg += $"[炸弹] 超出配额：已计划 {used} / 允许 {quota}\n";
+        }
+        else if (quota > 0 && used < quota)
+        {
+            hasUnderflow = true;
+            msg += $"[炸弹] 尚未用满：已计划 {used} / 允许 {quota}\n";
+        }
+
+        // Scout
+        quota = GetWeaponQuotaPublic(pid, WeaponType.Scout);
+        used = GetPlannedCountPublic(pid, WeaponType.Scout);
+        if (used > quota)
+        {
+            hasOverflow = true;
+            msg += $"[侦察] 超出配额：已计划 {used} / 允许 {quota}\n";
+        }
+        else if (quota > 0 && used < quota)
+        {
+            hasUnderflow = true;
+            msg += $"[侦察] 尚未用满：已计划 {used} / 允许 {quota}\n";
+        }
+
+        return !hasOverflow;
+    }
+
+    
 }
