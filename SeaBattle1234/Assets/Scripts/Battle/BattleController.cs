@@ -1,4 +1,6 @@
-﻿using UnityEngine;
+﻿using TMPro;
+using UnityEngine;
+using static GameManager;
 
 public class BattleController : MonoBehaviour
 {
@@ -28,6 +30,8 @@ public class BattleController : MonoBehaviour
     private TurnPlan[] plans = new TurnPlan[2] { new TurnPlan(), new TurnPlan() };
     private int planningPlayerId = 0; // 当前正在规划的玩家：0 或 1
     private TurnPlan plan => plans[planningPlayerId];
+
+    
     private int EnemyOf(int pid) => 1 - pid;
 
     void Start()
@@ -45,8 +49,8 @@ public class BattleController : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.A)) { currentTorpDir = Dir4.Left; }
         if (Input.GetKeyDown(KeyCode.D)) { currentTorpDir = Dir4.Right; }
 
-        if (Input.GetKeyDown(KeyCode.Space))
-            ResolveTurn();
+        //if (Input.GetKeyDown(KeyCode.Space))
+        //    ResolveTurn();
 
         if (Input.GetKeyDown(KeyCode.Backspace))
         {
@@ -79,7 +83,7 @@ public class BattleController : MonoBehaviour
 
         if (!ok)
         {
-            Debug.LogWarning($"[Battle] P{planningPlayerId} 无法继续添加 {currentWeapon}，已达到配额上限。");
+            Debug.LogWarning($"[Battle] P{planningPlayerId} cannot add more {currentWeapon}. Quota reached.");
         }
     }
 
@@ -398,64 +402,64 @@ public class BattleController : MonoBehaviour
 
             switch (name)
             {
-                case "护卫舰":
+                case "Frigate":
                     if (weapon == WeaponType.Gun) total += 1;
                     break;
 
-                case "鱼雷艇":
+                case "Torpedo Boat":
                     if (weapon == WeaponType.Torpedo) total += 1;
                     break;
 
-                case "驱逐舰":
+                case "Destroyer":
                     if (weapon == WeaponType.Gun) total += 1;
                     if (weapon == WeaponType.Torpedo) total += 1;
                     break;
 
-                case "巡洋舰":
+                case "Cruiser":
                     if (weapon == WeaponType.Gun) total += 3;
                     break;
 
-                case "重巡洋舰":
+                case "Heavy Cruiser":
                     if (weapon == WeaponType.Gun) total += 4;
                     break;
 
-                case "轻巡洋舰":
+                case "Light Cruiser":
                     if (weapon == WeaponType.Gun) total += 2;
                     if (weapon == WeaponType.Torpedo) total += 1;
                     break;
 
-                case "战列巡洋舰":
+                case "Battlecruiser":
                     if (weapon == WeaponType.Gun) total += 4;
                     if (weapon == WeaponType.Torpedo) total += 1;
                     break;
 
-                case "战列舰":
+                case "Battleship":
                     if (weapon == WeaponType.Gun) total += 6;
                     break;
 
-                case "航空战列舰（1）":
+                case "Aviation Battleship I":
                     if (weapon == WeaponType.Gun) total += 3;
+                    if (weapon == WeaponType.Scout) total += 1;
                     break;
 
-                case "航空战列舰（2）":
+                case "Aviation Battleship II":
                     if (weapon == WeaponType.Gun) total += 2;
-                    break;
-
-                case "装甲战列舰":
-                    if (weapon == WeaponType.Gun) total += 5;
-                    break;
-
-                case "护航航母":
                     if (weapon == WeaponType.Bomb) total += 1;
                     break;
 
-                case "航空母舰":
-                    if (weapon == WeaponType.Bomb) total += 2;
-                    if (weapon == WeaponType.Torpedo) total += 1;
+                case "Armored Battleship":
+                    if (weapon == WeaponType.Gun) total += 5;
                     break;
 
-                case "扫雷艇":
-                    if (weapon == WeaponType.Gun) total += 1;
+                case "Escort Carrier":
+                    if (weapon == WeaponType.Bomb) total += 1;
+                    if (weapon == WeaponType.Scout) total += 1;
+                    break;
+
+                case "Carrier":
+                    if (weapon == WeaponType.Bomb) total += 2;
+                    if (weapon == WeaponType.Torpedo) total += 1;
+                    if (weapon == WeaponType.Scout) total += 1;
                     break;
 
                 default:
@@ -538,5 +542,39 @@ public class BattleController : MonoBehaviour
         return !hasOverflow;
     }
 
+    public TMP_Text gunText;
+    public TMP_Text torpText;
+    public TMP_Text bombText;
+    public TMP_Text scoutText;
+
+    public TMP_Text warningText;
+
+    public void RefreshAttackList(int pid)
+    {
+        int gunUsed = GetPlannedCountPublic(pid, WeaponType.Gun);
+        int gunMax = GetWeaponQuotaPublic(pid, WeaponType.Gun);
+
+        int torpUsed = GetPlannedCountPublic(pid, WeaponType.Torpedo);
+        int torpMax = GetWeaponQuotaPublic(pid, WeaponType.Torpedo);
+
+        int bombUsed = GetPlannedCountPublic(pid, WeaponType.Bomb);
+        int bombMax = GetWeaponQuotaPublic(pid, WeaponType.Bomb);
+
+        int scoutUsed = GetPlannedCountPublic(pid, WeaponType.Scout);
+        int scoutMax = GetWeaponQuotaPublic(pid, WeaponType.Scout);
+
+        gunText.text = $"Gun: {gunUsed} / {gunMax}";
+        torpText.text = $"Torpedo: {torpUsed} / {torpMax}";
+        bombText.text = $"Bomb: {bombUsed} / {bombMax}";
+        scoutText.text = $"Scout: {scoutUsed} / {scoutMax}";
+
+        bool hasUnused =
+            gunUsed < gunMax ||
+            torpUsed < torpMax ||
+            bombUsed < bombMax ||
+            scoutUsed < scoutMax;
+
+        warningText.gameObject.SetActive(hasUnused);
+    }
     
 }

@@ -2,6 +2,8 @@
 using UnityEngine;
 using UnityEngine.EventSystems;
 using static GameManager;
+using UnityEngine.UI;
+using TMPro;
 
 public class PlacementGridView : MonoBehaviour
 {
@@ -21,7 +23,21 @@ public class PlacementGridView : MonoBehaviour
     //wyx 2026.3.1 增加临时棋盘变量，之后所有GameManager.Instance.boards[0]的地方均换为placementBoard，玩家
     public int playerId = 0;          // 0/1，在 Inspector 里改，明确在给哪个玩家摆放棋盘
     private BoardModel placementBoard;  //临时棋盘变量
-    private bool committed = false;   //阶段锁，放置重复调用copyfrom
+    
+
+    private Dictionary<int, int> remainingCounts = new Dictionary<int, int>();
+    private int selectedTypeId = -1;
+    private List<Button> shipButtons = new List<Button>();
+
+    [Header("Placement UI")]
+    public TMP_Text playerText;
+    public TMP_Text currentShipText;
+    public TMP_Text hintText;
+    public TMP_Text remainingShipsText;
+
+    [Header("Ship Select UI")]
+    public Transform shipListContainer;
+    public Button shipButtonPrefab;
 
     void Start()
     {
@@ -145,14 +161,38 @@ public class PlacementGridView : MonoBehaviour
     void BuildPlacementQueue()
     {
         queue.Clear();
+        remainingCounts.Clear();
+
         foreach (var n in ShipCatalog.Fleet)
+        {
+            remainingCounts[n.typeId] = n.count;
+
             for (int i = 0; i < n.count; i++)
                 queue.Add(n.typeId);
+        }
 
         queueIndex = 0;
-    }
 
-    int CurrentTypeId => (queueIndex < queue.Count) ? queue[queueIndex] : -1;
+        selectedTypeId = -1;
+        foreach (var n in ShipCatalog.Fleet)
+        {
+            if (remainingCounts[n.typeId] > 0)
+            {
+                selectedTypeId = n.typeId;
+                break;
+            }
+        }
+        Debug.Log($"[BuildPlacementQueue] remainingCounts.Count = {remainingCounts.Count}");
+        foreach (var kv in remainingCounts)
+        {
+            Debug.Log($"[BuildPlacementQueue] typeId={kv.Key}, count={kv.Value}");
+        }
+        Debug.Log($"[BuildPlacementQueue] selectedTypeId = {selectedTypeId}");
+        RefreshPlacementUI();
+        RebuildShipListUI();
+    }//remaining counts记录每种船剩几只，默认选中第一种还有余量的船
+
+    int CurrentTypeId => selectedTypeId;
 
     void PrintCurrentShipHint()
     {
@@ -160,6 +200,7 @@ public class PlacementGridView : MonoBehaviour
         if (tid == -1)
         {
             Debug.Log("✅ 摆放完成！");
+            RefreshPlacementUI();
             return;
         }
 
@@ -168,6 +209,7 @@ public class PlacementGridView : MonoBehaviour
         int ww = rotated ? t.h : t.w;
 
         Debug.Log($"当前要放置：{t.name}  尺寸={hh}x{ww}  (按 R 旋转)");
+        RefreshPlacementUI();
     }
 
     void BuildGrid()
@@ -189,6 +231,7 @@ public class PlacementGridView : MonoBehaviour
     void OnCellClicked(Vector2Int rc)
     {
         if (!inputEnabled) return;
+
         int tid = CurrentTypeId;
         if (tid == -1)
         {
@@ -203,18 +246,24 @@ public class PlacementGridView : MonoBehaviour
         bool ok = TryPlaceRectShip(placementBoard, tid, rc.x, rc.y, h, w);
         if (!ok) return;
 
+        remainingCounts[tid]--;
+        Debug.Log($"放置后：typeId={tid}, remain={remainingCounts[tid]}");
+
         queueIndex++;
+        AutoSelectNextAvailableShip();
+
+        Debug.Log($"当前选中船 typeId={CurrentTypeId}");
+
         Refresh();
         PrintCurrentShipHint();
-        //wyx 2026.3.1：拜访完成后将数据交接到 GameManager 的正式棋盘，并进入下一阶段
-        if (queueIndex >= queue.Count && !committed)
+
+        if (IsPlacementComplete())
         {
-            committed = true;
-            GameManager.Instance.boards[playerId].CopyFrom(placementBoard);  
-            Debug.Log($"已交接：placementBoard -> GameManager.boards[{playerId}]");
-            // TODO: 这里进入下一阶段：切场景/通知下一个玩家/开始战斗
+            Debug.Log("✅ 当前玩家所有船只已摆放完成，可以按 Enter 进入下一阶段。");
         }
-        Debug.Log($"临时船数={placementBoard.ships.Count}, GM船数={GameManager.Instance.boards[playerId].ships.Count}");
+
+        Debug.Log($"临时船数={placementBoard.ships.Count}");
+        RebuildShipListUI();
     }
 
     bool TryPlaceRectShip(BoardModel board, int typeId, int topR, int topC, int h, int w)
@@ -289,13 +338,15 @@ public class PlacementGridView : MonoBehaviour
 
         // 切玩家时重置临时棋盘与队列（最稳妥：每次进入场景都重新Start也行）
         placementBoard = new BoardModel();
-        committed = false;
+        
 
         BuildPlacementQueue();
         Refresh();
         PrintCurrentShipHint();
 
         Debug.Log($"[PlacementGridView] BindToPlayer({pid})");
+        RefreshPlacementUI();
+        RebuildShipListUI();
     }
 
     public void DisablePlacementInput() => inputEnabled = false;
@@ -315,5 +366,117 @@ public class PlacementGridView : MonoBehaviour
     public BoardModel GetPlacementBoard()
     {
         return placementBoard;
+    }
+    public void SelectShipType(int typeId)
+    {
+        if (!remainingCounts.ContainsKey(typeId)) return;
+        if (remainingCounts[typeId] <= 0) return;
+
+        selectedTypeId = typeId;
+        PrintCurrentShipHint();
+        RebuildShipListUI();
+    }
+    void AutoSelectNextAvailableShip()
+    {
+        if (selectedTypeId != -1 &&
+            remainingCounts.ContainsKey(selectedTypeId) &&
+            remainingCounts[selectedTypeId] > 0)
+            return;
+
+        selectedTypeId = -1;
+        foreach (var n in ShipCatalog.Fleet)
+        {
+            if (remainingCounts.ContainsKey(n.typeId) && remainingCounts[n.typeId] > 0)
+            {
+                selectedTypeId = n.typeId;
+                break;
+            }
+        }
+    }
+    public bool IsPlacementComplete()
+    {
+        Debug.Log($"[IsPlacementComplete] remainingCounts.Count = {remainingCounts.Count}");
+
+        foreach (var kv in remainingCounts)
+        {
+            Debug.Log($"[IsPlacementComplete] typeId={kv.Key}, remain={kv.Value}");
+            if (kv.Value > 0) return false;
+        }
+
+        return true;
+    }
+    void RefreshPlacementUI()
+    {
+        if (playerText != null)
+            playerText.text = $"Player: P{playerId}";
+
+        if (CurrentTypeId == -1)
+        {
+            if (currentShipText != null)
+                currentShipText.text = "Current Ship: All placed";
+        }
+        else
+        {
+            var t = ShipCatalog.Types[CurrentTypeId];
+            int hh = rotated ? t.w : t.h;
+            int ww = rotated ? t.h : t.w;
+
+            if (currentShipText != null)
+                currentShipText.text = $"Current Ship: {t.name} ({hh}x{ww})";
+        }
+
+        if (hintText != null)
+            hintText.text = "Controls: Click to place, R to rotate, Enter to confirm";
+
+        if (remainingShipsText != null)
+        {
+            remainingShipsText.text = "Select a ship from the list below";
+        }
+    }
+    void RebuildShipListUI()
+    {
+        Debug.Log($"[RebuildShipListUI] container = {shipListContainer.name}");
+        if (shipListContainer == null || shipButtonPrefab == null) return;
+
+        // 只删除之前动态生成的按钮，不删别的子物体
+        foreach (Button btn in shipButtons)
+        {
+            if (btn != null)
+                Destroy(btn.gameObject);
+        }
+        shipButtons.Clear();
+
+        foreach (var n in ShipCatalog.Fleet)
+        {
+            int tid = n.typeId;
+            int remain = remainingCounts.ContainsKey(tid) ? remainingCounts[tid] : 0;
+
+            Button btn = Instantiate(shipButtonPrefab, shipListContainer);
+            shipButtons.Add(btn);
+
+            TMP_Text label = btn.GetComponentInChildren<TMP_Text>();
+            if (label != null)
+            {
+                string shipName = ShipCatalog.Types[tid].name;
+                label.text = $"{shipName} x{remain}";
+            }
+
+            btn.interactable = remain > 0;
+
+            int capturedTid = tid;
+            btn.onClick.RemoveAllListeners();
+            btn.onClick.AddListener(() => SelectShipType(capturedTid));
+
+            Image img = btn.GetComponent<Image>();
+            if (img != null)
+            {
+                if (tid == selectedTypeId)
+                    img.color = new Color(0.85f, 0.9f, 0.45f, 1f);
+                else if (remain <= 0)
+                    img.color = new Color(0.4f, 0.4f, 0.4f, 0.8f);
+                else
+                    img.color = new Color(1f, 1f, 1f, 0.9f);
+            }
+        }
     }
 }

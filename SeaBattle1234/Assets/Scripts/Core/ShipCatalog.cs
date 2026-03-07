@@ -21,19 +21,19 @@ public static class ShipCatalog
     // typeId ¶ÔÓ¦ÏÂ±ê
     public static readonly List<ShipType> Types = new List<ShipType>
     {
-        new ShipType("»¤ÎÀ½¢", 1, 2),      // 0
-        new ShipType("ÓãÀ×Í§", 1, 2),      // 1
-        new ShipType("ÇýÖð½¢", 1, 3),      // 2
-        new ShipType("Ñ²Ñó½¢", 1, 4),      // 3
-        new ShipType("ÖØÑ²Ñó½¢", 1, 5),    // 4
-        new ShipType("ÇáÑ²Ñó½¢", 1, 4),    // 5
-        new ShipType("Õ½ÁÐÑ²Ñó½¢", 2, 4),  // 6
-        new ShipType("Õ½ÁÐ½¢", 2, 5),      // 7
-        new ShipType("º½¿ÕÕ½ÁÐ½¢1", 2, 4), // 8
-        new ShipType("º½¿ÕÕ½ÁÐ½¢2", 2, 4), // 9
-        new ShipType("×°¼×Õ½ÁÐ½¢", 2, 4),  // 10
-        new ShipType("»¤º½º½Ä¸", 2, 3),    // 11
-        new ShipType("º½¿ÕÄ¸½¢", 2, 5),    // 12
+        new ShipType("Frigate", 1, 2),             // 0
+        new ShipType("Torpedo Boat", 1, 2),        // 1
+        new ShipType("Destroyer", 1, 3),           // 2
+        new ShipType("Cruiser", 1, 4),             // 3
+        new ShipType("Heavy Cruiser", 1, 5),       // 4
+        new ShipType("Light Cruiser", 1, 4),       // 5
+        new ShipType("Battlecruiser", 2, 4),       // 6
+        new ShipType("Battleship", 2, 5),          // 7
+        new ShipType("Aviation Battleship I", 2, 4), // 8
+        new ShipType("Aviation Battleship II", 2, 4), // 9
+        new ShipType("Armored Battleship", 2, 4),  // 10
+        new ShipType("Escort Carrier", 2, 3),      // 11
+        new ShipType("Carrier", 2, 5),             // 12
     };
 
     public struct Need { public int typeId; public int count; public Need(int t, int c) { typeId = t; count = c; } }

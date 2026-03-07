@@ -54,13 +54,25 @@ public class PlacementFlowController : MonoBehaviour
         var gm = GameManager.Instance;
         int pid = gm.activePlayerId;
 
+        Debug.Log("[FinishPlacement] Enter pressed");
+
         if (grid == null)
         {
             Debug.LogError("PlacementFlowController: grid 未绑定");
             return;
         }
 
-        // 直接把临时棋盘复制进正式棋盘
+        Debug.Log($"[FinishPlacement] grid object = {grid.gameObject.name}");
+
+        bool completed = grid.IsPlacementComplete();
+        Debug.Log($"[FinishPlacement] completed = {completed}");
+
+        if (!completed)
+        {
+            Debug.Log("还有船未摆放，不能进入下一阶段。");
+            return;
+        }
+
         gm.boards[pid].CopyFrom(grid.GetPlacementBoard());
 
         Debug.Log($"[Placement] Player{pid} finished placement. ships={gm.boards[pid].ships.Count}");
@@ -71,7 +83,7 @@ public class PlacementFlowController : MonoBehaviour
             gm.activePlayerId = 1;
 
             Debug.Log($"[PlacementFlow] Loading placement scene = {placementSceneName}");
-            SceneManager.LoadScene(placementSceneName);   // ✅ 改这里
+            SceneManager.LoadScene(placementSceneName);
         }
         else
         {
@@ -80,7 +92,7 @@ public class PlacementFlowController : MonoBehaviour
             gm.ready[0] = gm.ready[1] = false;
 
             Debug.Log($"[PlacementFlow] Loading battle scene = {battleSceneName}");
-            SceneManager.LoadScene(battleSceneName);      // ✅ 改这里
+            SceneManager.LoadScene(battleSceneName);
         }
     }
 }
