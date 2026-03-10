@@ -18,12 +18,16 @@ public class BattleLayoutController : MonoBehaviour
     public Vector2 focusOffset = new Vector2(40f, 20f);
 
     [Header("Resolving Position")]
-    public Vector2 resolveOffset = new Vector2(180f, 0f);
+    public Vector2 resolveOffset = new Vector2(320f, 0f);
 
     [Header("Scale")]
     public float bigScale = 1f;
     public float smallScale = 0.6f;
     public float resolveScale = 0.8f;
+
+    [Header("Visual")]
+    public float activeAlpha = 1f;
+    public float inactiveAlpha = 0.22f;
 
     [Header("Animation Speed")]
     public float animSpeed = 8f;
@@ -49,31 +53,37 @@ public class BattleLayoutController : MonoBehaviour
 
     void LayoutPlanningP0()
     {
+        // 当前使用中的棋盘放到最上层
+        if (grid0Rect != null) grid0Rect.SetAsLastSibling();
+
         // P0 主棋盘
         SetGrid(
             grid0Rect,
             new Vector2(-focusOffset.x, focusOffset.y),
             bigScale,
-            1f
+            activeAlpha
         );
 
-        // P1 小棋盘
+        // P1 弃用棋盘
         SetGrid(
             grid1Rect,
             new Vector2(cornerOffset.x, -cornerOffset.y),
             smallScale,
-            0.4f
+            inactiveAlpha
         );
     }
 
     void LayoutPlanningP1()
     {
-        // P0 小棋盘
+        // 当前使用中的棋盘放到最上层
+        if (grid1Rect != null) grid1Rect.SetAsLastSibling();
+
+        // P0 弃用棋盘
         SetGrid(
             grid0Rect,
             new Vector2(-cornerOffset.x, cornerOffset.y),
             smallScale,
-            0.4f
+            inactiveAlpha
         );
 
         // P1 主棋盘
@@ -81,12 +91,13 @@ public class BattleLayoutController : MonoBehaviour
             grid1Rect,
             new Vector2(focusOffset.x, focusOffset.y),
             bigScale,
-            1f
+            activeAlpha
         );
     }
 
     void LayoutResolving()
     {
+        // resolving 阶段不用强调层级，保持当前顺序即可
         SetGrid(
             grid0Rect,
             new Vector2(-resolveOffset.x, resolveOffset.y),
@@ -104,6 +115,8 @@ public class BattleLayoutController : MonoBehaviour
 
     void SetGrid(RectTransform rect, Vector2 targetPos, float targetScale, float alpha)
     {
+        if (rect == null) return;
+
         rect.anchoredPosition = Vector2.Lerp(
             rect.anchoredPosition,
             targetPos,

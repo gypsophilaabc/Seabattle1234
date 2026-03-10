@@ -10,6 +10,9 @@ public class BattleFlowController : MonoBehaviour
     private bool[] underfillConfirmed = new bool[2];
     private bool[] nextRoundReady = new bool[2];
 
+    public int p0LossThisRound = 0;
+    public int p1LossThisRound = 0;
+
 
     void Start()
     {
@@ -149,6 +152,7 @@ public class BattleFlowController : MonoBehaviour
 
             Debug.Log("[BattleFlow] ApplyPhase -> resolving");
         }
+        battle.ShowResolvedBoards(enemyGrid0, enemyGrid1);
     }
 
     void SetGridInteractable(BattleEnemyGridView grid, bool interactable)
@@ -182,17 +186,22 @@ public class BattleFlowController : MonoBehaviour
         int pid = gm.activePlayerId;
 
         bool ok = battle.ValidatePlanCounts(pid, out string msg, out bool hasOverflow, out bool hasUnderflow);
+        Debug.Log($"[ConfirmCheck] pid={pid}, hasOverflow={hasOverflow}, hasUnderflow={hasUnderflow}, msg={msg}");
 
         if (hasOverflow)
         {
             Debug.LogWarning($"[BattleFlow] P{pid} plan invalid:\n{msg}");
             return;
         }
-
+        Debug.Log($"[ConfirmCheck] underfillConfirmed[{pid}] = {IsUnderfillConfirmed(pid)}");
         if (hasUnderflow && !IsUnderfillConfirmed(pid))
         {
             ConfirmUnderfill(pid);
-            Debug.LogWarning($"[BattleFlow] P{pid} still has unused weapons. Press Confirm again to continue.\n{msg}");
+
+            var hud = FindObjectOfType<BattleHUDController>();
+            if (hud != null)
+                hud.ShowWarning(BuildUnderuseMessage(pid));
+
             return;
         }
 
@@ -211,10 +220,26 @@ public class BattleFlowController : MonoBehaviour
         {
             if (gm.ready[0] && gm.ready[1])
             {
-                gm.phase = GamePhase.BattleResolving;
-                ApplyPhase();
+                // 先记录结算前沉船数
+                int p0SunkBefore = CountSunkShips(gm.boards[0]);
+                int p1SunkBefore = CountSunkShips(gm.boards[1]);
 
+                gm.phase = GamePhase.BattleResolving;
+
+                // 先执行结算
                 battle.ResolveTurnPublic();
+
+                // 再记录结算后沉船数
+                int p0SunkAfter = CountSunkShips(gm.boards[0]);
+                int p1SunkAfter = CountSunkShips(gm.boards[1]);
+
+                // 本回合新增战损
+                p0LossThisRound = p0SunkAfter - p0SunkBefore;
+                p1LossThisRound = p1SunkAfter - p1SunkBefore;
+
+                // 这时候再应用 resolving 布局，展示结果
+                ApplyPhase();
+                battle.ShowResolvedBoards(enemyGrid0, enemyGrid1);
 
                 bool p0Lose = gm.boards[0].AllShipsSunk();
                 bool p1Lose = gm.boards[1].AllShipsSunk();
@@ -233,7 +258,6 @@ public class BattleFlowController : MonoBehaviour
                     return;
                 }
 
-                // 进入“下一回合准备”阶段
                 gm.ready[0] = gm.ready[1] = false;
                 nextRoundReady[0] = false;
                 nextRoundReady[1] = false;
@@ -256,6 +280,7 @@ public class BattleFlowController : MonoBehaviour
         {
             gm.phase = GamePhase.BattlePlanningP0;
             gm.activePlayerId = 0;
+            gm.roundNumber += 1;
 
             nextRoundReady[0] = false;
             nextRoundReady[1] = false;
@@ -280,4 +305,44 @@ public class BattleFlowController : MonoBehaviour
     {
         return GameManager.Instance.activePlayerId;
     }
+
+    int CountSunkShips(BoardModel board)
+    {
+        int count = 0;
+        foreach(var ship in board.ships)
+            {
+            if (ship.sunk)
+                count++;
+        }
+        return count;
+    }
+    string BuildUnderuseMessage(int pid)
+    {
+        if (battle == null) return "Unused weapons remain.";
+
+        int gunUsed = battle.GetPlannedCountPublic(pid, WeaponType.Gun);
+        int gunMax = battle.GetWeaponQuotaPublic(pid, WeaponType.Gun);
+
+        int torpUsed = battle.GetPlannedCountPublic(pid, WeaponType.Torpedo);
+        int torpMax = battle.GetWeaponQuotaPublic(pid, WeaponType.Torpedo);
+
+        int bombUsed = battle.GetPlannedCountPublic(pid, WeaponType.Bomb);
+        int bombMax = battle.GetWeaponQuotaPublic(pid, WeaponType.Bomb);
+
+        int scoutUsed = battle.GetPlannedCountPublic(pid, WeaponType.Scout);
+        int scoutMax = battle.GetWeaponQuotaPublic(pid, WeaponType.Scout);
+
+        System.Collections.Generic.List<string> parts = new System.Collections.Generic.List<string>();
+
+        if (gunUsed < gunMax) parts.Add($"Gun {gunUsed}/{gunMax}");
+        if (torpUsed < torpMax) parts.Add($"Torpedo {torpUsed}/{torpMax}");
+        if (bombUsed < bombMax) parts.Add($"Bomb {bombUsed}/{bombMax}");
+        if (scoutUsed < scoutMax) parts.Add($"Scout {scoutUsed}/{scoutMax}");
+
+        if (parts.Count == 0)
+            return "";
+
+        return "Unused weapons remain: " + string.Join(", ", parts) + ".\nPress Confirm again to continue.";
+    }
+
 }

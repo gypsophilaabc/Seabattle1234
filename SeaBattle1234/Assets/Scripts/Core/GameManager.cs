@@ -14,6 +14,8 @@ public class GameManager : MonoBehaviour
 
     public int currentPlacementPlayer = 0;
 
+    public int roundNumber = 1;
+
     public enum GamePhase
     {
         PlacementP0,
