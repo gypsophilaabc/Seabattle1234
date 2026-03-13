@@ -163,7 +163,9 @@ public class PlacementGridView : MonoBehaviour
         queue.Clear();
         remainingCounts.Clear();
 
-        foreach (var n in ShipCatalog.Fleet)
+        List<ShipCatalog.Need> fleetNeeds = GetFleetNeedsForCurrentPlayer();
+
+        foreach (var n in fleetNeeds)
         {
             remainingCounts[n.typeId] = n.count;
 
@@ -174,7 +176,7 @@ public class PlacementGridView : MonoBehaviour
         queueIndex = 0;
 
         selectedTypeId = -1;
-        foreach (var n in ShipCatalog.Fleet)
+        foreach (var n in fleetNeeds)
         {
             if (remainingCounts[n.typeId] > 0)
             {
@@ -182,15 +184,18 @@ public class PlacementGridView : MonoBehaviour
                 break;
             }
         }
+
+        Debug.Log($"[BuildPlacementQueue] playerId = {playerId}");
         Debug.Log($"[BuildPlacementQueue] remainingCounts.Count = {remainingCounts.Count}");
         foreach (var kv in remainingCounts)
         {
             Debug.Log($"[BuildPlacementQueue] typeId={kv.Key}, count={kv.Value}");
         }
         Debug.Log($"[BuildPlacementQueue] selectedTypeId = {selectedTypeId}");
+
         RefreshPlacementUI();
         RebuildShipListUI();
-    }//remaining counts记录每种船剩几只，默认选中第一种还有余量的船
+    }
 
     int CurrentTypeId => selectedTypeId;
 
@@ -384,7 +389,9 @@ public class PlacementGridView : MonoBehaviour
             return;
 
         selectedTypeId = -1;
-        foreach (var n in ShipCatalog.Fleet)
+
+        List<ShipCatalog.Need> fleetNeeds = GetFleetNeedsForCurrentPlayer();
+        foreach (var n in fleetNeeds)
         {
             if (remainingCounts.ContainsKey(n.typeId) && remainingCounts[n.typeId] > 0)
             {
@@ -438,7 +445,6 @@ public class PlacementGridView : MonoBehaviour
         Debug.Log($"[RebuildShipListUI] container = {shipListContainer.name}");
         if (shipListContainer == null || shipButtonPrefab == null) return;
 
-        // 只删除之前动态生成的按钮，不删别的子物体
         foreach (Button btn in shipButtons)
         {
             if (btn != null)
@@ -446,7 +452,9 @@ public class PlacementGridView : MonoBehaviour
         }
         shipButtons.Clear();
 
-        foreach (var n in ShipCatalog.Fleet)
+        List<ShipCatalog.Need> fleetNeeds = GetFleetNeedsForCurrentPlayer();
+
+        foreach (var n in fleetNeeds)
         {
             int tid = n.typeId;
             int remain = remainingCounts.ContainsKey(tid) ? remainingCounts[tid] : 0;
@@ -479,4 +487,38 @@ public class PlacementGridView : MonoBehaviour
             }
         }
     }
+
+    //以下是为了实现拓展性玩法而加的函数
+    private List<ShipCatalog.Need> GetFleetNeedsForCurrentPlayer()
+    {
+        List<ShipCatalog.Need> result = new List<ShipCatalog.Need>();
+
+        if (GameSetupRuntime.CurrentSetup == null)
+        {
+            result.AddRange(ShipCatalog.Fleet);
+            return result;
+        }
+
+        FleetSetupData fleetData = null;
+
+        if (playerId == 0)
+            fleetData = GameSetupRuntime.CurrentSetup.player0Fleet;
+        else
+            fleetData = GameSetupRuntime.CurrentSetup.player1Fleet;
+
+        if (fleetData == null || fleetData.selectedShips == null || fleetData.selectedShips.Count == 0)
+        {
+            result.AddRange(ShipCatalog.Fleet);
+            return result;
+        }
+
+        foreach (var ship in fleetData.selectedShips)
+        {
+            if (ship.count <= 0) continue;
+            result.Add(new ShipCatalog.Need(ship.typeId, ship.count));
+        }
+
+        return result;
+    }
+
 }

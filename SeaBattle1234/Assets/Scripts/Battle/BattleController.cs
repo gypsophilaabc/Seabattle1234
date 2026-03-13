@@ -383,71 +383,21 @@ public class BattleController : MonoBehaviour
         {
             if (ship.sunk) continue;
 
-            string name = ShipCatalog.Types[ship.typeId].name;
+            ShipWeaponLoadout loadout = ShipWeaponCatalog.GetLoadout(ship.typeId);
 
-            switch (name)
+            switch (weapon)
             {
-                case "Frigate":
-                    if (weapon == WeaponType.Gun) total += 1;
+                case WeaponType.Gun:
+                    total += loadout.gun;
                     break;
-
-                case "Torpedo Boat":
-                    if (weapon == WeaponType.Torpedo) total += 1;
+                case WeaponType.Torpedo:
+                    total += loadout.torpedo;
                     break;
-
-                case "Destroyer":
-                    if (weapon == WeaponType.Gun) total += 1;
-                    if (weapon == WeaponType.Torpedo) total += 1;
+                case WeaponType.Bomb:
+                    total += loadout.bomb;
                     break;
-
-                case "Cruiser":
-                    if (weapon == WeaponType.Gun) total += 3;
-                    break;
-
-                case "Heavy Cruiser":
-                    if (weapon == WeaponType.Gun) total += 4;
-                    break;
-
-                case "Light Cruiser":
-                    if (weapon == WeaponType.Gun) total += 2;
-                    if (weapon == WeaponType.Torpedo) total += 1;
-                    break;
-
-                case "Battlecruiser":
-                    if (weapon == WeaponType.Gun) total += 4;
-                    if (weapon == WeaponType.Torpedo) total += 1;
-                    break;
-
-                case "Battleship":
-                    if (weapon == WeaponType.Gun) total += 6;
-                    break;
-
-                case "Aviation Battleship I":
-                    if (weapon == WeaponType.Gun) total += 3;
-                    if (weapon == WeaponType.Scout) total += 1;
-                    break;
-
-                case "Aviation Battleship II":
-                    if (weapon == WeaponType.Gun) total += 2;
-                    if (weapon == WeaponType.Bomb) total += 1;
-                    break;
-
-                case "Armored Battleship":
-                    if (weapon == WeaponType.Gun) total += 5;
-                    break;
-
-                case "Escort Carrier":
-                    if (weapon == WeaponType.Bomb) total += 1;
-                    if (weapon == WeaponType.Scout) total += 1;
-                    break;
-
-                case "Carrier":
-                    if (weapon == WeaponType.Bomb) total += 2;
-                    if (weapon == WeaponType.Torpedo) total += 1;
-                    if (weapon == WeaponType.Scout) total += 1;
-                    break;
-
-                default:
+                case WeaponType.Scout:
+                    total += loadout.scout;
                     break;
             }
         }
