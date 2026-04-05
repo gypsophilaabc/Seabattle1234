@@ -1,5 +1,4 @@
 ﻿using UnityEngine;
-using static GameManager;
 
 public class BattleController : MonoBehaviour
 {
@@ -27,6 +26,40 @@ public class BattleController : MonoBehaviour
     private int planningPlayerId = 0;
     private TurnPlan plan => plans[planningPlayerId];
 
+    [Header("Preview Sprites - Green")]
+    public Sprite gunPreviewSprite;
+    
+
+    public Sprite[] torpedoRightPreviewSprites = new Sprite[5];
+    public Sprite[] torpedoLeftPreviewSprites = new Sprite[5];
+    public Sprite[] torpedoUpPreviewSprites = new Sprite[5];
+    public Sprite[] torpedoDownPreviewSprites = new Sprite[5];
+
+    private const float HoverPreviewAlpha = 0.5f;
+    private const float PlannedPreviewAlpha = 0.75f;
+
+    [Header("Bomb Preview Sprites")]
+    [SerializeField] private Sprite bombPreviewTL;
+    [SerializeField] private Sprite bombPreviewTR;
+    [SerializeField] private Sprite bombPreviewBL;
+    [SerializeField] private Sprite bombPreviewBR;
+
+    [Header("Scout Preview Sprites")]
+    [SerializeField] private Sprite scoutPreviewTL;
+    [SerializeField] private Sprite scoutPreviewTR;
+    [SerializeField] private Sprite scoutPreviewBL;
+    [SerializeField] private Sprite scoutPreviewBR;
+
+
+
+
+    public enum QuadPart
+    {
+        TL,
+        TR,
+        BL,
+        BR
+    }
     void Start()
     {
     }
@@ -44,32 +77,10 @@ public class BattleController : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.D)) currentTorpDir = Dir4.Right;
 
         if (Input.GetKeyDown(KeyCode.Backspace))
-        {
-            if (plan.TryPop(out var a))
-            {
-                var hud = FindObjectOfType<BattleHUDController>();
-                if (hud != null)
-                {
-                    string msg = $"Undo: {FormatTurnAction(a)}";
-                    Debug.Log("[UndoWarning] " + msg);
-                    hud.ShowWarning(msg);
-                }
-
-                OnPlanChanged?.Invoke();
-                RedrawAll();
-            }
-            else
-            {
-                var hud = FindObjectOfType<BattleHUDController>();
-                if (hud != null)
-                    hud.ShowWarning("Nothing to undo.");
-            }
-        }
+            UI_Undo();
 
         if (Input.GetKeyDown(KeyCode.C))
-        {
             UI_ClearPlan();
-        }
     }
 
     private void OnClickEnemyCell(Vector2Int rc)
@@ -81,32 +92,25 @@ public class BattleController : MonoBehaviour
         else
             ok = AddPlannedAction(planningPlayerId, currentWeapon, rc);
 
+        // 这里不再统一弹“at limit”提示
+        // 具体错误（重复 / 超额）由 AddPlannedAction / AddPlannedTorpedo 自己提示
         if (!ok)
-        {
-            int used = GetPlannedCountPublic(planningPlayerId, currentWeapon);
-            int quota = GetWeaponQuotaPublic(planningPlayerId, currentWeapon);
-
-            var hud = FindObjectOfType<BattleHUDController>();
-            if (hud != null)
-            {
-                string msg = $"{WeaponDisplayName(currentWeapon)} is already at limit: {used}/{quota}";
-                Debug.Log("[OverflowWarning] " + msg);
-                hud.ShowWarning(msg);
-            }
-
-            Debug.LogWarning($"[Battle] P{planningPlayerId} cannot add more {currentWeapon}. quota={used}/{quota}");
-        }
+            return;
     }
 
     public void UI_EndPlanningForCurrentPlayer()
     {
+        hasHover = false;
         planningPlayerId = 1 - planningPlayerId;
+
         OnPlanChanged?.Invoke();
         RedrawAll();
     }
 
     public void ResolveTurn()
     {
+        hasHover = false;
+
         var gm = GameManager.Instance;
 
         var b0 = gm.boards[0];
@@ -160,6 +164,8 @@ public class BattleController : MonoBehaviour
         if (enemyGridView == null || enemyBoard == null || playerView == null) return;
 
         enemyGridView.Refresh(enemyBoard, playerView);
+        enemyGridView.ClearAllPreviews();
+
         DrawPlanPreviews();
 
         if (hasHover)
@@ -170,52 +176,72 @@ public class BattleController : MonoBehaviour
     {
         var curPlan = plans[planningPlayerId];
 
-        var gunCol = new Color(0.4f, 0.7f, 1f, 0.55f);
-        var torpCol = new Color(0.7f, 0.7f, 0.7f, 0.55f);
-        var bombCol = new Color(0.3f, 1f, 0.3f, 0.55f);
-        var scoutCol = new Color(1f, 1f, 0.4f, 0.55f);
-
         foreach (var a in curPlan.GunSeq())
-            enemyGridView.PreviewCell(a.anchor.x, a.anchor.y, gunCol);
+            enemyGridView.PreviewCellSprite(a.anchor.x, a.anchor.y, gunPreviewSprite, PlannedPreviewAlpha);
 
         foreach (var a in curPlan.TorpSeq())
-            foreach (var p in GetTorpPath(a.anchor, a.dir))
-                enemyGridView.PreviewCell(p.x, p.y, torpCol);
+        {
+            var path = GetTorpPath(a.anchor, a.dir);
+            for (int i = 0; i < path.Length; i++)
+            {
+                var p = path[i];
+                Sprite s = GetTorpedoPreviewSprite(a.dir, i);
+                enemyGridView.PreviewCellSprite(p.x, p.y, s, PlannedPreviewAlpha);
+            }
+        }
 
         foreach (var a in curPlan.BombSeq())
-            foreach (var p in GetArea2x2(a.anchor))
-                enemyGridView.PreviewCell(p.x, p.y, bombCol);
+        {
+            int r = a.anchor.x;
+            int c = a.anchor.y;
+
+            enemyGridView.PreviewCellSprite(r, c, GetBombPreviewSprite(QuadPart.TL), PlannedPreviewAlpha);
+            enemyGridView.PreviewCellSprite(r, c + 1, GetBombPreviewSprite(QuadPart.TR), PlannedPreviewAlpha);
+            enemyGridView.PreviewCellSprite(r + 1, c, GetBombPreviewSprite(QuadPart.BL), PlannedPreviewAlpha);
+            enemyGridView.PreviewCellSprite(r + 1, c + 1, GetBombPreviewSprite(QuadPart.BR), PlannedPreviewAlpha);
+        }
 
         foreach (var a in curPlan.ScoutSeq())
-            foreach (var p in GetArea2x2(a.anchor))
-                enemyGridView.PreviewCell(p.x, p.y, scoutCol);
+        {
+            int r = a.anchor.x;
+            int c = a.anchor.y;
+
+            enemyGridView.PreviewCellSprite(r, c, GetScoutPreviewSprite(QuadPart.TL), PlannedPreviewAlpha);
+            enemyGridView.PreviewCellSprite(r, c + 1, GetScoutPreviewSprite(QuadPart.TR), PlannedPreviewAlpha);
+            enemyGridView.PreviewCellSprite(r + 1, c, GetScoutPreviewSprite(QuadPart.BL), PlannedPreviewAlpha);
+            enemyGridView.PreviewCellSprite(r + 1, c + 1, GetScoutPreviewSprite(QuadPart.BR), PlannedPreviewAlpha);
+        }
     }
 
     private void DrawHoverPreview()
     {
-        var gunCol = new Color(0.4f, 0.7f, 1f, 0.85f);
-        var torpCol = new Color(0.7f, 0.7f, 0.7f, 0.85f);
-        var bombCol = new Color(0.3f, 1f, 0.3f, 0.85f);
-        var scoutCol = new Color(1f, 1f, 0.4f, 0.85f);
-
         if (currentWeapon == WeaponType.Gun)
         {
-            enemyGridView.PreviewCell(hoverRC.x, hoverRC.y, gunCol);
+            enemyGridView.PreviewCellSprite(hoverRC.x, hoverRC.y, gunPreviewSprite, HoverPreviewAlpha);
         }
         else if (currentWeapon == WeaponType.Torpedo)
         {
-            foreach (var p in GetTorpPath(hoverRC, currentTorpDir))
-                enemyGridView.PreviewCell(p.x, p.y, torpCol);
+            var path = GetTorpPath(hoverRC, currentTorpDir);
+            for (int i = 0; i < path.Length; i++)
+            {
+                var p = path[i];
+                Sprite s = GetTorpedoPreviewSprite(currentTorpDir, i);
+                enemyGridView.PreviewCellSprite(p.x, p.y, s, HoverPreviewAlpha);
+            }
         }
         else if (currentWeapon == WeaponType.Bomb)
         {
-            foreach (var p in GetArea2x2(hoverRC))
-                enemyGridView.PreviewCell(p.x, p.y, bombCol);
+            enemyGridView.PreviewCellSprite(hoverRC.x, hoverRC.y, GetBombPreviewSprite(QuadPart.TL), HoverPreviewAlpha);
+            enemyGridView.PreviewCellSprite(hoverRC.x, hoverRC.y + 1, GetBombPreviewSprite(QuadPart.TR), HoverPreviewAlpha);
+            enemyGridView.PreviewCellSprite(hoverRC.x + 1, hoverRC.y, GetBombPreviewSprite(QuadPart.BL), HoverPreviewAlpha);
+            enemyGridView.PreviewCellSprite(hoverRC.x + 1, hoverRC.y + 1, GetBombPreviewSprite(QuadPart.BR), HoverPreviewAlpha);
         }
         else if (currentWeapon == WeaponType.Scout)
         {
-            foreach (var p in GetArea2x2(hoverRC))
-                enemyGridView.PreviewCell(p.x, p.y, scoutCol);
+            enemyGridView.PreviewCellSprite(hoverRC.x, hoverRC.y, GetScoutPreviewSprite(QuadPart.TL), HoverPreviewAlpha);
+            enemyGridView.PreviewCellSprite(hoverRC.x, hoverRC.y + 1, GetScoutPreviewSprite(QuadPart.TR), HoverPreviewAlpha);
+            enemyGridView.PreviewCellSprite(hoverRC.x + 1, hoverRC.y, GetScoutPreviewSprite(QuadPart.BL), HoverPreviewAlpha);
+            enemyGridView.PreviewCellSprite(hoverRC.x + 1, hoverRC.y + 1, GetScoutPreviewSprite(QuadPart.BR), HoverPreviewAlpha);
         }
     }
 
@@ -266,14 +292,20 @@ public class BattleController : MonoBehaviour
     public void UI_SetWeapon(WeaponType w)
     {
         currentWeapon = w;
-        if (config != null && config.enableDebugLogs) Debug.Log($"[UI] Weapon={w}");
+
+        if (config != null && config.enableDebugLogs)
+            Debug.Log($"[UI] Weapon={w}");
+
         RedrawAll();
     }
 
     public void UI_SetTorpDir(Dir4 dir)
     {
         currentTorpDir = dir;
-        if (config != null && config.enableDebugLogs) Debug.Log($"[UI] TorpDir={dir}");
+
+        if (config != null && config.enableDebugLogs)
+            Debug.Log($"[UI] TorpDir={dir}");
+
         RedrawAll();
     }
 
@@ -283,10 +315,58 @@ public class BattleController : MonoBehaviour
         OnPlanChanged?.Invoke();
     }
 
+    private bool HasPlannedSameCell(int pid, WeaponType weapon, Vector2Int anchor)
+    {
+        switch (weapon)
+        {
+            case WeaponType.Gun:
+                foreach (var a in plans[pid].gun)
+                    if (a.anchor == anchor) return true;
+                return false;
+
+            case WeaponType.Bomb:
+                foreach (var a in plans[pid].bomb)
+                    if (a.anchor == anchor) return true;
+                return false;
+
+            case WeaponType.Scout:
+                foreach (var a in plans[pid].scout)
+                    if (a.anchor == anchor) return true;
+                return false;
+
+            default:
+                return false;
+        }
+    }
+
+    private bool HasPlannedSameTorpedo(int pid, Vector2Int start, Dir4 dir)
+    {
+        foreach (var a in plans[pid].torp)
+        {
+            if (a.anchor == start && a.dir == dir)
+                return true;
+        }
+        return false;
+    }
+
     public bool AddPlannedAction(int attackerId, WeaponType wpn, Vector2Int anchor)
     {
+        if (HasPlannedSameCell(attackerId, wpn, anchor))
+        {
+            var hud = FindObjectOfType<BattleHUDController>();
+            if (hud != null)
+                hud.ShowWarning($"{WeaponDisplayName(wpn)} already planned at ({anchor.x},{anchor.y}).");
+
+            Debug.LogWarning($"[Battle] Duplicate planned {wpn} at {anchor} by P{attackerId}");
+            return false;
+        }
+
         if (!CanPlanWeapon(attackerId, wpn))
         {
+            var hud = FindObjectOfType<BattleHUDController>();
+            if (hud != null)
+                hud.ShowWarning($"{WeaponDisplayName(wpn)} is already at limit: {GetPlannedCountPublic(attackerId, wpn)}/{GetWeaponQuota(attackerId, wpn)}");
+
             Debug.LogWarning($"[Battle] P{attackerId} cannot plan more {wpn}. quota={GetWeaponQuota(attackerId, wpn)} used={GetPlannedCountPublic(attackerId, wpn)}");
             return false;
         }
@@ -306,8 +386,22 @@ public class BattleController : MonoBehaviour
 
     public bool AddPlannedTorpedo(int attackerId, Vector2Int start, Dir4 dir)
     {
+        if (HasPlannedSameTorpedo(attackerId, start, dir))
+        {
+            var hud = FindObjectOfType<BattleHUDController>();
+            if (hud != null)
+                hud.ShowWarning($"Torpedo already planned at ({start.x},{start.y}) dir={dir}.");
+
+            Debug.LogWarning($"[Battle] Duplicate planned Torpedo at {start} dir={dir} by P{attackerId}");
+            return false;
+        }
+
         if (!CanPlanWeapon(attackerId, WeaponType.Torpedo))
         {
+            var hud = FindObjectOfType<BattleHUDController>();
+            if (hud != null)
+                hud.ShowWarning($"Torpedo is already at limit: {GetPlannedCountPublic(attackerId, WeaponType.Torpedo)}/{GetWeaponQuota(attackerId, WeaponType.Torpedo)}");
+
             Debug.LogWarning($"[Battle] P{attackerId} cannot plan more Torpedo. quota={GetWeaponQuota(attackerId, WeaponType.Torpedo)} used={GetPlannedCountPublic(attackerId, WeaponType.Torpedo)}");
             return false;
         }
@@ -559,5 +653,51 @@ public class BattleController : MonoBehaviour
 
         OnPlanChanged?.Invoke();
         RedrawAll();
+    }
+
+    private Sprite GetTorpedoPreviewSprite(Dir4 dir, int index)
+    {
+        if (index < 0 || index >= 5) return null;
+
+        switch (dir)
+        {
+            case Dir4.Right:
+                return torpedoRightPreviewSprites[index];
+
+            case Dir4.Left:
+                return torpedoLeftPreviewSprites[index];
+
+            case Dir4.Up:
+                return torpedoDownPreviewSprites[index];   // 先故意交换
+
+            case Dir4.Down:
+                return torpedoUpPreviewSprites[index];     // 先故意交换
+
+            default:
+                return null;
+        }
+    }
+    private Sprite GetBombPreviewSprite(QuadPart part)
+    {
+        switch (part)
+        {
+            case QuadPart.TL: return bombPreviewTL;
+            case QuadPart.TR: return bombPreviewTR;
+            case QuadPart.BL: return bombPreviewBL;
+            case QuadPart.BR: return bombPreviewBR;
+            default: return null;
+        }
+    }
+
+    private Sprite GetScoutPreviewSprite(QuadPart part)
+    {
+        switch (part)
+        {
+            case QuadPart.TL: return scoutPreviewTL;
+            case QuadPart.TR: return scoutPreviewTR;
+            case QuadPart.BL: return scoutPreviewBL;
+            case QuadPart.BR: return scoutPreviewBR;
+            default: return null;
+        }
     }
 }

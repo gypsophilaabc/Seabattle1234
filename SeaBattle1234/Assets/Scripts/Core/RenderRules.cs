@@ -5,26 +5,31 @@ public static class RenderRules
 
     public static RenderState GetRenderState(in CellTruth truth, CellIntelFlags intel)
     {
-        // 1) 火炮信息最强：命中/未命中永远覆盖其他染色
-        if (Has(intel, CellIntelFlags.GunHit)) return RenderState.GunHit;
-        if (Has(intel, CellIntelFlags.GunShot)) return RenderState.GunMiss;
+        // 1. 火炮最高优先级
+        if (Has(intel, CellIntelFlags.GunHit))
+            return RenderState.GunHit;
 
-        // 2) 侦察永远显示（但仍要能显示受损船）
+        if (Has(intel, CellIntelFlags.GunShot))
+            return RenderState.GunMiss;
+
+        // 2. 侦察决定基础真实状态
+        // 2. 侦察直接揭示真实状态
         if (Has(intel, CellIntelFlags.Scout))
         {
             if (truth.hasShip)
                 return truth.isDamaged ? RenderState.ScoutDamagedShip : RenderState.ScoutShip;
-            return RenderState.ScoutEmpty;
+            else
+                return RenderState.ScoutEmpty;
         }
 
-        // 3) 组强提示（只有造成新伤害时才会被 resolver 加上）
-        if (Has(intel, CellIntelFlags.TorpHitLine)) return RenderState.TorpHitLine;
-        if (Has(intel, CellIntelFlags.BombAreaHit)) return RenderState.BombAreaHit;
+        //// 3. 炸弹先维持旧逻辑（鱼雷不再走这里）
+        //if (Has(intel, CellIntelFlags.BombAreaHit))
+        //    return RenderState.BombAreaHit;
 
-        // 4) 组弱提示
-        if (Has(intel, CellIntelFlags.BombArea)) return RenderState.BombArea;
-        if (Has(intel, CellIntelFlags.TorpLine)) return RenderState.TorpLine;
+        //if (Has(intel, CellIntelFlags.BombArea))
+        //    return RenderState.BombArea;
 
+        // 4. 默认
         return RenderState.Sea;
     }
 }

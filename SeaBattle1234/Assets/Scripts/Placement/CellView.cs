@@ -1,23 +1,210 @@
 ﻿using System;
 using UnityEngine;
-using UnityEngine.UI;
 using UnityEngine.EventSystems;
+using UnityEngine.UI;
+using static BattleController;
 
 public class CellView : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
 {
     public Vector2Int coord;
 
-    private Image img;
+    [Header("UI")]
+    [SerializeField] private Image img;
+
+    [Header("Base Sprites")]
+    [SerializeField] private Sprite seaSprite;
+    [SerializeField] private Sprite gunMissSprite;
+    [SerializeField] private Sprite gunHitSprite;
+
+    [SerializeField] private Sprite scoutShipSprite;
+    [SerializeField] private Sprite scoutDamagedShipSprite;
+    [SerializeField] private Sprite scoutEmptySprite;
+
+    [Header("Bomb Miss Sprites")]
+    [SerializeField] private Sprite bombMissTL;
+    [SerializeField] private Sprite bombMissTR;
+    [SerializeField] private Sprite bombMissBL;
+    [SerializeField] private Sprite bombMissBR;
+
+    [Header("Bomb Hit Sprites")]
+    [SerializeField] private Sprite bombHitTL;
+    [SerializeField] private Sprite bombHitTR;
+    [SerializeField] private Sprite bombHitBL;
+    [SerializeField] private Sprite bombHitBR;
+
+    [Header("Torpedo Overlay")]
+    [SerializeField] private Image torpedoOverlayImage;
+
+    [Header("Torpedo Right Miss Sprites")]
+    [SerializeField] private Sprite torpedoRightMiss0;
+    [SerializeField] private Sprite torpedoRightMiss1;
+    [SerializeField] private Sprite torpedoRightMiss2;
+    [SerializeField] private Sprite torpedoRightMiss3;
+    [SerializeField] private Sprite torpedoRightMiss4;
+    [Header("Torpedo Right Hit Sprites")]
+    [SerializeField] private Sprite torpedoRightHit0;
+    [SerializeField] private Sprite torpedoRightHit1;
+    [SerializeField] private Sprite torpedoRightHit2;
+    [SerializeField] private Sprite torpedoRightHit3;
+    [SerializeField] private Sprite torpedoRightHit4;
+
+    [Header("Torpedo Left Miss Sprites")]
+    [SerializeField] private Sprite torpedoLeftMiss0;
+    [SerializeField] private Sprite torpedoLeftMiss1;
+    [SerializeField] private Sprite torpedoLeftMiss2;
+    [SerializeField] private Sprite torpedoLeftMiss3;
+    [SerializeField] private Sprite torpedoLeftMiss4;
+    [Header("Torpedo Left Hit Sprites")]
+    [SerializeField] private Sprite torpedoLeftHit0;
+    [SerializeField] private Sprite torpedoLeftHit1;
+    [SerializeField] private Sprite torpedoLeftHit2;
+    [SerializeField] private Sprite torpedoLeftHit3;
+    [SerializeField] private Sprite torpedoLeftHit4;
+
+    [Header("Torpedo Up Miss Sprites")]
+    [SerializeField] private Sprite torpedoUpMiss0;
+    [SerializeField] private Sprite torpedoUpMiss1;
+    [SerializeField] private Sprite torpedoUpMiss2;
+    [SerializeField] private Sprite torpedoUpMiss3;
+    [SerializeField] private Sprite torpedoUpMiss4;
+    [Header("Torpedo Up Hit Sprites")]
+    [SerializeField] private Sprite torpedoUpHit0;
+    [SerializeField] private Sprite torpedoUpHit1;
+    [SerializeField] private Sprite torpedoUpHit2;
+    [SerializeField] private Sprite torpedoUpHit3;
+    [SerializeField] private Sprite torpedoUpHit4;
+
+    [Header("Torpedo Down Miss Sprites")]
+    [SerializeField] private Sprite torpedoDownMiss0;
+    [SerializeField] private Sprite torpedoDownMiss1;
+    [SerializeField] private Sprite torpedoDownMiss2;
+    [SerializeField] private Sprite torpedoDownMiss3;
+    [SerializeField] private Sprite torpedoDownMiss4;
+    [Header("Torpedo Down Hit Sprites")]
+    [SerializeField] private Sprite torpedoDownHit0;
+    [SerializeField] private Sprite torpedoDownHit1;
+    [SerializeField] private Sprite torpedoDownHit2;
+    [SerializeField] private Sprite torpedoDownHit3;
+    [SerializeField] private Sprite torpedoDownHit4;
+
+    [SerializeField] private UnityEngine.UI.Image previewOverlayImage;
+    [SerializeField] private UnityEngine.UI.Image bombOverlayImage;
+
+    private Sprite[] torpedoRightMissSprites;
+    private Sprite[] torpedoRightHitSprites;
+
+    private Sprite[] torpedoLeftMissSprites;
+    private Sprite[] torpedoLeftHitSprites;
+
+    private Sprite[] torpedoUpMissSprites;
+    private Sprite[] torpedoUpHitSprites;
+
+    private Sprite[] torpedoDownMissSprites;
+    private Sprite[] torpedoDownHitSprites;
+
     private Action<Vector2Int> onClick;
     private Action<Vector2Int> onHoverEnter;
     private Action<Vector2Int> onHoverExit;
 
     void Awake()
     {
-        img = GetComponent<Image>();
+        torpedoRightMissSprites = new Sprite[5]
+        {
+        torpedoRightMiss0,
+        torpedoRightMiss1,
+        torpedoRightMiss2,
+        torpedoRightMiss3,
+        torpedoRightMiss4
+        };
+
+        torpedoRightHitSprites = new Sprite[5]
+        {
+        torpedoRightHit0,
+        torpedoRightHit1,
+        torpedoRightHit2,
+        torpedoRightHit3,
+        torpedoRightHit4
+        };
+
+        torpedoLeftMissSprites = new Sprite[5]
+        {
+        torpedoLeftMiss0,
+        torpedoLeftMiss1,
+        torpedoLeftMiss2,
+        torpedoLeftMiss3,
+        torpedoLeftMiss4
+        };
+
+        torpedoLeftHitSprites = new Sprite[5]
+        {
+        torpedoLeftHit0,
+        torpedoLeftHit1,
+        torpedoLeftHit2,
+        torpedoLeftHit3,
+        torpedoLeftHit4
+        };
+
+        torpedoUpMissSprites = new Sprite[5]
+        {
+        torpedoUpMiss0,
+        torpedoUpMiss1,
+        torpedoUpMiss2,
+        torpedoUpMiss3,
+        torpedoUpMiss4
+        };
+
+        torpedoUpHitSprites = new Sprite[5]
+        {
+        torpedoUpHit0,
+        torpedoUpHit1,
+        torpedoUpHit2,
+        torpedoUpHit3,
+        torpedoUpHit4
+        };
+
+        torpedoDownMissSprites = new Sprite[5]
+        {
+        torpedoDownMiss0,
+        torpedoDownMiss1,
+        torpedoDownMiss2,
+        torpedoDownMiss3,
+        torpedoDownMiss4
+        };
+
+        torpedoDownHitSprites = new Sprite[5]
+        {
+        torpedoDownHit0,
+        torpedoDownHit1,
+        torpedoDownHit2,
+        torpedoDownHit3,
+        torpedoDownHit4
+        };
+
+        if (torpedoOverlayImage != null)
+        {
+            torpedoOverlayImage.sprite = null;
+            torpedoOverlayImage.gameObject.SetActive(false);
+
+            Color c = torpedoOverlayImage.color;
+            c.a = 0.5f;
+            torpedoOverlayImage.color = c;
+
+            torpedoOverlayImage.raycastTarget = false;
+        }
+
+        if (bombOverlayImage != null)
+        {
+            bombOverlayImage.sprite = null;
+            bombOverlayImage.gameObject.SetActive(false);
+
+            Color c = bombOverlayImage.color;
+            c.a = 0f;
+            bombOverlayImage.color = c;
+
+            bombOverlayImage.raycastTarget = false;
+        }
     }
 
-    // ✅ 兼容：点击 + 悬停 enter/exit
     public void Init(
         Vector2Int c,
         Action<Vector2Int> onClick,
@@ -38,36 +225,105 @@ public class CellView : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
         }
     }
 
-    public void ApplyRenderState(RenderState s)
+    public void ApplyRenderState(RenderState rs)
     {
-        switch (s)
+        if (img == null) return;
+
+        switch (rs)
         {
-            case RenderState.Sea: img.color = new Color(0.2f, 0.5f, 0.9f, 1f); break;
-            case RenderState.GunMiss: img.color = new Color(0.6f, 0.8f, 1f, 1f); break;
-            case RenderState.GunHit: img.color = new Color(1f, 0.4f, 0.2f, 1f); break;
-            case RenderState.TorpLine: img.color = new Color(0.6f, 0.6f, 0.6f, 1f); break;
-            case RenderState.TorpHitLine: img.color = new Color(0.7f, 0.9f, 1f, 1f); break;
-            case RenderState.BombArea: img.color = new Color(0.9f, 0.85f, 0.4f, 1f); break;
-            case RenderState.BombHit: img.color = new Color(0.9f, 0.9f, 0.2f, 1f); break;
-            case RenderState.ScoutShip: img.color = Color.black; break;
-            case RenderState.ScoutEmpty: img.color = Color.white; break;  
-            case RenderState.BombAreaHit: img.color = new Color(1.00f, 0.70f, 0.10f, 1f); break;   // 橙（强）
-            case RenderState.ScoutDamagedShip: img.color = new Color(0.55f, 0.10f, 0.10f, 1f); break; // 深红/暗红
+            case RenderState.Sea:
+                img.sprite = seaSprite;
+                break;
+
+            case RenderState.GunMiss:
+                img.sprite = gunMissSprite;
+                break;
+
+            case RenderState.GunHit:
+                img.sprite = gunHitSprite;
+                break;
+
+            case RenderState.ScoutShip:
+                img.sprite = scoutShipSprite;
+                break;
+
+            case RenderState.ScoutDamagedShip:
+                img.sprite = scoutDamagedShipSprite;
+                break;
+
+            case RenderState.ScoutEmpty:
+                img.sprite = scoutEmptySprite;
+                break;
+
+            //case RenderState.BombArea:
+            //    img.sprite = bombAreaSprite;
+            //    break;
+
+            //case RenderState.BombHit:
+            //    img.sprite = bombHitSprite;
+            //    break;
+
+            //case RenderState.BombAreaHit:
+            //    img.sprite = bombAreaHitSprite;
+            //    break;
+
+            default:
+                img.sprite = seaSprite;
+                break;
         }
+
+        img.color = Color.white;
     }
 
-    // ✅ 预览覆盖（我们用半透明更像“悬停”）
+    private void ApplySprite(Sprite sprite, Color color)
+    {
+        img.sprite = sprite;
+        img.color = color;
+        img.type = Image.Type.Simple;
+        img.preserveAspect = false;
+    }
+
     public void SetPreview(Color color)
     {
-        img.color = color;
+        // 不再直接染主图，统一走 preview overlay
+        if (previewOverlayImage == null) return;
+
+        previewOverlayImage.sprite = null; // 没有贴图时可以先只显示纯色，也可以直接不用这个接口
+        previewOverlayImage.gameObject.SetActive(true);
+
+        Color c = previewOverlayImage.color;
+        c.r = color.r;
+        c.g = color.g;
+        c.b = color.b;
+        c.a = color.a;
+        previewOverlayImage.color = c;
     }
 
     public void ClearPreview()
     {
-        // 不在这里恢复颜色：外面会 Refresh() 再 ApplyRenderState
+        // 1. 清新的 preview overlay
+        if (previewOverlayImage != null)
+        {
+            previewOverlayImage.sprite = null;
+            previewOverlayImage.gameObject.SetActive(false);
+
+            Color pc = previewOverlayImage.color;
+            pc.a = 0f;
+            previewOverlayImage.color = pc;
+        }
+
+        // 2. 兜底：把旧主图颜色恢复
+        if (img != null)
+        {
+            Color c = img.color;
+            c.r = 1f;
+            c.g = 1f;
+            c.b = 1f;
+            c.a = 1f;
+            img.color = c;
+        }
     }
 
-    // ===== Hover events =====
     public void OnPointerEnter(PointerEventData eventData)
     {
         onHoverEnter?.Invoke(coord);
@@ -76,5 +332,136 @@ public class CellView : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
     public void OnPointerExit(PointerEventData eventData)
     {
         onHoverExit?.Invoke(coord);
+    }
+
+    public void ClearTorpedoOverlay()
+    {
+        if (torpedoOverlayImage == null) return;
+
+        torpedoOverlayImage.sprite = null;
+        torpedoOverlayImage.gameObject.SetActive(false);
+    }
+
+    public void SetTorpedoOverlay(Dir4 dir, int index, bool isHitLine)
+    {
+        if (torpedoOverlayImage == null) return;
+        if (index < 0 || index >= 5) return;
+
+        Sprite sprite = GetTorpedoSprite(dir, index, isHitLine);
+
+        if (sprite == null)
+        {
+            Debug.LogWarning($"[CellView] Torpedo sprite missing. dir={dir}, index={index}, isHit={isHitLine}");
+            torpedoOverlayImage.sprite = null;
+            torpedoOverlayImage.gameObject.SetActive(false);
+            return;
+        }
+
+        torpedoOverlayImage.sprite = sprite;
+
+        Color c = torpedoOverlayImage.color;
+        c.a = 0.5f;
+        torpedoOverlayImage.color = c;
+
+        torpedoOverlayImage.gameObject.SetActive(true);
+    }
+
+    private Sprite GetTorpedoSprite(Dir4 dir, int index, bool isHitLine)
+    {
+        if (index < 0 || index >= 5) return null;
+
+        switch (dir)
+        {
+            case Dir4.Right:
+                return isHitLine ? torpedoRightHitSprites[index] : torpedoRightMissSprites[index];
+
+            case Dir4.Left:
+                return isHitLine ? torpedoLeftHitSprites[index] : torpedoLeftMissSprites[index];
+
+            case Dir4.Up:
+                return isHitLine ? torpedoUpHitSprites[index] : torpedoUpMissSprites[index];
+
+            case Dir4.Down:
+                return isHitLine ? torpedoDownHitSprites[index] : torpedoDownMissSprites[index];
+
+            default:
+                return null;
+        }
+    }
+
+    public void SetPreviewSprite(Sprite sprite, float alpha)
+    {
+        if (previewOverlayImage == null) return;
+
+        if (sprite == null || alpha <= 0f)
+        {
+            ClearPreview();
+            return;
+        }
+
+        previewOverlayImage.sprite = sprite;
+
+        Color c = previewOverlayImage.color;
+        c.r = 1f;
+        c.g = 1f;
+        c.b = 1f;
+        c.a = alpha;
+        previewOverlayImage.color = c;
+
+        previewOverlayImage.gameObject.SetActive(true);
+        previewOverlayImage.transform.SetAsLastSibling();
+    }
+
+    public void ClearBombOverlay()
+    {
+        if (bombOverlayImage == null) return;
+
+        bombOverlayImage.sprite = null;
+        bombOverlayImage.gameObject.SetActive(false);
+    }
+
+    public void SetBombOverlay(QuadPart part, bool isHit, float alpha = 1f)
+    {
+        if (bombOverlayImage == null) return;
+
+        Sprite sprite = null;
+
+        if (isHit)
+        {
+            switch (part)
+            {
+                case QuadPart.TL: sprite = bombHitTL; break;
+                case QuadPart.TR: sprite = bombHitTR; break;
+                case QuadPart.BL: sprite = bombHitBL; break;
+                case QuadPart.BR: sprite = bombHitBR; break;
+            }
+        }
+        else
+        {
+            switch (part)
+            {
+                case QuadPart.TL: sprite = bombMissTL; break;
+                case QuadPart.TR: sprite = bombMissTR; break;
+                case QuadPart.BL: sprite = bombMissBL; break;
+                case QuadPart.BR: sprite = bombMissBR; break;
+            }
+        }
+
+        if (sprite == null)
+        {
+            ClearBombOverlay();
+            return;
+        }
+
+        bombOverlayImage.sprite = sprite;
+
+        Color c = bombOverlayImage.color;
+        c.r = 1f;
+        c.g = 1f;
+        c.b = 1f;
+        c.a = alpha;
+        bombOverlayImage.color = c;
+
+        bombOverlayImage.gameObject.SetActive(true);
     }
 }

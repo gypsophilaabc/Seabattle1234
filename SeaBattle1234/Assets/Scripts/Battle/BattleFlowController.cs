@@ -13,6 +13,8 @@ public class BattleFlowController : MonoBehaviour
     public int p0LossThisRound = 0;
     public int p1LossThisRound = 0;
 
+    public GameOverController gameOverUI;
+
 
     void Start()
     {
@@ -248,12 +250,21 @@ public class BattleFlowController : MonoBehaviour
                 {
                     gm.phase = GamePhase.GameOver;
 
+                    int unlockedId = CodexUnlockSystem.Instance.UnlockRandomCodex();
+
+                    Debug.Log($"Unlocked codex card {unlockedId}");
+
+                    int winner = -1;
+
                     if (p0Lose && p1Lose)
-                        Debug.Log("[Battle] Game Over: Draw");
+                        winner = -1;
                     else if (p0Lose)
-                        Debug.Log("[Battle] Game Over: Player 1 Wins");
+                        winner = 1;
                     else
-                        Debug.Log("[Battle] Game Over: Player 0 Wins");
+                        winner = 0;
+
+                    if (gameOverUI != null)
+                        gameOverUI.ShowWinner(winner);
 
                     return;
                 }

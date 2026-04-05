@@ -39,6 +39,10 @@ public class PlacementGridView : MonoBehaviour
     public Transform shipListContainer;
     public Button shipButtonPrefab;
 
+    [Header("Placement Preview Sprites")]
+    public Sprite placementPreviewValidSprite;
+    public Sprite placementPreviewInvalidSprite;
+
     void Start()
     {
         var gm = GameManager.Instance;
@@ -60,7 +64,17 @@ public class PlacementGridView : MonoBehaviour
             rotated = !rotated;
             Debug.Log(rotated ? "旋转：开 (h/w交换)" : "旋转：关");
             PrintCurrentShipHint();
-            UpdatePreview(); // 旋转后更新预览
+            UpdatePreview();
+        }
+
+        if (Input.GetKeyDown(KeyCode.Backspace))
+        {
+            UndoLastPlacement();
+        }
+
+        if (Input.GetKeyDown(KeyCode.C))
+        {
+            ClearAllPlacement();
         }
 
         UpdateHoverCellFromUIRaycast();
@@ -92,14 +106,7 @@ public class PlacementGridView : MonoBehaviour
 
     void UpdatePreview()
     {
-        // 清除上一次预览（恢复正常渲染）
-        if (lastPreviewCells.Count > 0)
-        {
-            foreach (var p in lastPreviewCells)
-                RefreshCell(p.x, p.y);
-
-            lastPreviewCells.Clear();
-        }
+        ClearAllPreviews();
 
         int tid = CurrentTypeId;
         if (tid == -1) return;
@@ -112,17 +119,17 @@ public class PlacementGridView : MonoBehaviour
         int topR = hoverCell.Value.x;
         int topC = hoverCell.Value.y;
 
-        // 计算预览覆盖格
         var cells = GetRectCells(topR, topC, h, w);
         bool valid = CanPlaceRect(placementBoard, topR, topC, h, w);
 
         lastPreviewValid = valid;
         lastPreviewCells = cells;
 
-        // 上色（合法绿 / 非法红）
-        Color col = valid ? new Color(0f, 1f, 0f, 0.35f) : new Color(1f, 0f, 0f, 0.35f);
+        Sprite previewSprite = valid ? placementPreviewValidSprite : placementPreviewInvalidSprite;
+        float previewAlpha = valid ? 0.75f : 0.55f;
+
         foreach (var p in cells)
-            views[p.x, p.y].SetPreview(col);
+            views[p.x, p.y].SetPreviewSprite(previewSprite, previewAlpha);
     }
 
     List<Vector2Int> GetRectCells(int topR, int topC, int h, int w)
@@ -232,7 +239,6 @@ public class PlacementGridView : MonoBehaviour
         }
     }
 
-
     void OnCellClicked(Vector2Int rc)
     {
         if (!inputEnabled) return;
@@ -250,6 +256,15 @@ public class PlacementGridView : MonoBehaviour
 
         bool ok = TryPlaceRectShip(placementBoard, tid, rc.x, rc.y, h, w);
         if (!ok) return;
+
+        placementHistory.Add(new PlacementRecord
+        {
+            typeId = tid,
+            topR = rc.x,
+            topC = rc.y,
+            h = h,
+            w = w
+        });
 
         remainingCounts[tid]--;
         Debug.Log($"放置后：typeId={tid}, remain={remainingCounts[tid]}");
@@ -343,7 +358,7 @@ public class PlacementGridView : MonoBehaviour
 
         // 切玩家时重置临时棋盘与队列（最稳妥：每次进入场景都重新Start也行）
         placementBoard = new BoardModel();
-        
+        placementHistory.Clear();
 
         BuildPlacementQueue();
         Refresh();
@@ -433,7 +448,7 @@ public class PlacementGridView : MonoBehaviour
         }
 
         if (hintText != null)
-            hintText.text = "Controls: Click to place, R to rotate, Enter to confirm";
+            hintText.text = "Controls: Click to place, R to rotate, Backspace to undo, C to clear, Enter to confirm";
 
         if (remainingShipsText != null)
         {
@@ -520,5 +535,89 @@ public class PlacementGridView : MonoBehaviour
 
         return result;
     }
+    [System.Serializable]
+    private class PlacementRecord
+    {
+        public int typeId;
+        public int topR;
+        public int topC;
+        public int h;
+        public int w;
+    }
+    private List<PlacementRecord> placementHistory = new List<PlacementRecord>();
 
+    public void UndoLastPlacement()
+    {
+        if (placementHistory.Count == 0)
+        {
+            Debug.Log("[Placement] Nothing to undo.");
+            if (hintText != null)
+                hintText.text = "Nothing to undo.";
+            return;
+        }
+
+        // 删除最后一次放置记录
+        placementHistory.RemoveAt(placementHistory.Count - 1);
+
+        // 重建棋盘与剩余数量
+        RebuildPlacementBoardFromHistory();
+
+        Refresh();
+        PrintCurrentShipHint();
+        RefreshPlacementUI();
+        RebuildShipListUI();
+
+        Debug.Log("[Placement] Undo last placement.");
+    }
+    public void ClearAllPlacement()
+    {
+        placementHistory.Clear();
+        RebuildPlacementBoardFromHistory();
+
+        Refresh();
+        PrintCurrentShipHint();
+        RefreshPlacementUI();
+        RebuildShipListUI();
+
+        Debug.Log("[Placement] Clear all placements.");
+    }
+
+    private void RebuildPlacementBoardFromHistory()
+    {
+        placementBoard = new BoardModel();
+
+        remainingCounts.Clear();
+
+        List<ShipCatalog.Need> fleetNeeds = GetFleetNeedsForCurrentPlayer();
+        foreach (var n in fleetNeeds)
+        {
+            remainingCounts[n.typeId] = n.count;
+        }
+
+        foreach (var record in placementHistory)
+        {
+            TryPlaceRectShip(placementBoard, record.typeId, record.topR, record.topC, record.h, record.w);
+
+            if (remainingCounts.ContainsKey(record.typeId))
+                remainingCounts[record.typeId]--;
+        }
+
+        selectedTypeId = -1;
+        AutoSelectNextAvailableShip();
+
+        lastPreviewCells.Clear();
+        hoverCell = null;
+    }
+
+    public void ClearAllPreviews()
+    {
+        for (int r = 0; r < BoardModel.H; r++)
+        {
+            for (int c = 0; c < BoardModel.W; c++)
+            {
+                if (views[r, c] != null)
+                    views[r, c].ClearPreview();
+            }
+        }
+    }
 }
